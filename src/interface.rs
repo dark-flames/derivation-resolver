@@ -1,6 +1,6 @@
 use crate::error::Error;
 use crate::print::{ToToken, TokenBuffer};
-use std::fmt::{Display, Formatter, Result as fmtResult, Write};
+use std::fmt::{Result as fmtResult, Write};
 
 pub type Result<T> = std::result::Result<T, Error>;
 pub type RuleName = &'static str;

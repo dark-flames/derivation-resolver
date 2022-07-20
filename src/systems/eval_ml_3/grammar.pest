@@ -37,18 +37,14 @@ env_segment = {
 }
 
 atom_term = { integer | boolean | ident | L_PAREN ~ term ~ R_PAREN }
-multi_term = { atom_term ~ (OP_TIMES ~ multi_term)* }
-add_term = { multi_term  ~ ((OP_PLUS | OP_MINUS) ~ add_term)* }
-lt_term = { add_term  ~ (OP_LT ~ lt_term)* }
-
-
-if_term = _{ IF ~ term ~ THEN ~ term ~ ELSE ~ term }
-let_in_term = _{ LET ~ ident ~ ASSIGN ~ term ~ IN ~ term }
-fun_term = _{ FUN ~ ident ~ ARROW ~ term }
-let_rec_in_term = _{ LET ~ REC ~ ident ~ ASSIGN ~ fun_term ~ IN ~ term }
+op_term = { atom_term ~(OP ~ atom_term) * }
+if_term = { IF ~ term ~ THEN ~ term ~ ELSE ~ term }
+let_in_term = { LET ~ ident ~ ASSIGN ~ term ~ IN ~ term }
+fun_term = { FUN ~ ident ~ ARROW ~ term }
+let_rec_in_term = { LET ~ REC ~ ident ~ ASSIGN ~ fun_term ~ IN ~ term }
 
 term_without_app = {
-    lt_term |
+    op_term |
     if_term |
     let_in_term |
     fun_term |
@@ -106,9 +102,10 @@ R_PAREN = _{")"}
 L_BRACKET = _{"["}
 R_BRACKET = _{"]"}
 COMMA = _{","}
-OP_PLUS = _{"+"}
-OP_MINUS = _{"-"}
-OP_TIMES = _{"*"}
-OP_LT = _{"<"}
+OP = _{ OP_PLUS | OP_MINUS | OP_TIMES | OP_LT }
+OP_PLUS = {"+"}
+OP_MINUS = {"-"}
+OP_TIMES = {"*"}
+OP_LT = {"<"}
 
 WHITESPACE = _{ " " | "\t" }

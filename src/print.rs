@@ -1,6 +1,4 @@
-use crate::error::Error;
 use std::fmt::{Error as FmtError, Result as FmtResult, Write};
-use std::io;
 use std::iter::repeat;
 use std::mem::replace;
 
@@ -39,7 +37,7 @@ impl TokenBuffer {
         Self::new(self.indent + 1)
     }
 
-    pub fn commit_block(&mut self, mut block: TokenBlock) -> FmtResult {
+    pub fn commit_block(&mut self, block: TokenBlock) -> FmtResult {
         self.write_char('{')?;
         self.commit_line(false)?;
         self.tokens.extend(block.tokens.into_iter());

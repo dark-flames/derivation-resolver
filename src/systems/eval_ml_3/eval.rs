@@ -109,10 +109,7 @@ pub fn eval(env: &Env, node: &AstNode) -> interface::Result<(DerivationTree<Judg
                     body,
                 }) => Ok((bind.clone(), f_env.clone(), body, E_APP)),
                 Value::RecFun(box RecursiveFunction {
-                    env: f_env,
-                    ident,
-                    bind,
-                    body,
+                    ident, bind, body, ..
                 }) => Ok((
                     bind.clone(),
                     Env::Segment(Box::new(env.clone()), ident.clone(), f_value.clone()),
