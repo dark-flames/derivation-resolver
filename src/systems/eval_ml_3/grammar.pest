@@ -1,0 +1,114 @@
+entry = _{SOI ~ judgement ~ EOI}
+
+judgement = {
+    eval_to_judgement |
+    plus_is_judgement |
+    minus_is_judgement |
+    times_is_judgement |
+    lt_is_judgement
+}
+
+eval_to_judgement = {
+    env ~ V_DASH ~ term ~ EVAL_TO ~ value
+}
+
+plus_is_judgement = {
+    integer ~ PLUS ~ integer ~ IS ~ integer
+}
+
+minus_is_judgement = {
+    integer ~ MINUS ~ integer ~ IS ~ integer
+}
+
+times_is_judgement = {
+    integer ~ TIMES ~ integer ~ IS ~ integer
+}
+
+lt_is_judgement = {
+    integer ~ LT ~ integer ~ IS ~ boolean
+}
+
+env = {
+    env_segment? ~ (COMMA ~ env_segment)*
+}
+
+env_segment = {
+    ident ~ ASSIGN ~ value
+}
+
+atom_term = { integer | boolean | ident | L_PAREN ~ term ~ R_PAREN }
+multi_term = { atom_term ~ (OP_TIMES ~ multi_term)* }
+add_term = { multi_term  ~ ((OP_PLUS | OP_MINUS) ~ add_term)* }
+lt_term = { add_term  ~ (OP_LT ~ lt_term)* }
+
+
+if_term = _{ IF ~ term ~ THEN ~ term ~ ELSE ~ term }
+let_in_term = _{ LET ~ ident ~ ASSIGN ~ term ~ IN ~ term }
+fun_term = _{ FUN ~ ident ~ ARROW ~ term }
+let_rec_in_term = _{ LET ~ REC ~ ident ~ ASSIGN ~ fun_term ~ IN ~ term }
+
+term_without_app = {
+    lt_term |
+    if_term |
+    let_in_term |
+    fun_term |
+    let_rec_in_term
+}
+
+term = { term_without_app ~ (term)* }
+
+
+value = {
+    integer |
+    boolean |
+    value_fun |
+    value_rec_fun
+}
+
+value_fun = {
+   L_PAREN ~ env ~ R_PAREN ~ L_BRACKET ~ FUN ~ ident ~ ARROW ~ term ~ R_PAREN
+}
+
+value_rec_fun = {
+    L_PAREN ~ env ~ R_PAREN ~ L_BRACKET ~ REC ~ ident ~ ASSIGN ~ FUN ~ ident ~ ARROW ~ term ~ R_PAREN
+}
+
+digit = _{ '0'..'9' }
+unsigned_int = @{ digit ~ (digit)* }
+integer = @{ "-"? ~ unsigned_int }
+ident = @{ !(keyword  ~ WHITESPACE) ~ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
+boolean = @{ TRUE | FALSE }
+
+// Keyword
+keyword = { FUN | REC | IF | THEN | ELSE | LET | IN | EVAL_TO | IS | PLUS | MINUS | TIMES | TRUE | FALSE }
+FUN = _{"fun"}
+REC = _{"rec"}
+IF = _{"if"}
+THEN = _{"then"}
+ELSE = _{"else"}
+LET = _{"let"}
+IN = _{"in"}
+EVAL_TO = _{"evalto"}
+IS = _{"is"}
+PLUS = _{"plus"}
+MINUS = _{"minus"}
+TIMES = _{"times"}
+LT = _{"less" ~ "than"}
+TRUE = @{"true"}
+FALSE = @{"false"}
+
+/// Red
+ARROW = _{"->"}
+ASSIGN = _{"="}
+V_DASH = _{"|-"}
+L_PAREN = _{"("}
+R_PAREN = _{")"}
+L_BRACKET = _{"["}
+R_BRACKET = _{"]"}
+COMMA = _{","}
+OP_PLUS = _{"+"}
+OP_MINUS = _{"-"}
+OP_TIMES = _{"*"}
+OP_LT = _{"<"}
+
+WHITESPACE = _{ " " | "\t" }
