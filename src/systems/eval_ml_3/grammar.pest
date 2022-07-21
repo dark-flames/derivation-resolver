@@ -42,7 +42,7 @@ ap_term = { non_ap_term ~ (non_ap_term)* }
 op_term = { ap_term ~(op ~ ap_term) * }
 if_term = { keyword_if ~ term ~ keyword_then ~ term ~ keyword_else ~ term }
 let_in_term = { keyword_let ~ ident ~ assign ~ term ~ keyword_in ~ term }
-let_rec_in_term = { keyword_let ~ keyword_rec ~ ident ~ assign ~ fun_term ~ keyword_in ~ term }
+let_rec_in_term = { keyword_let ~ keyword_rec ~ ident ~ assign ~ keyword_fun ~ ident ~ arrow ~ term ~ keyword_in ~ term }
 
 non_ap_term = _{
     atom_term |

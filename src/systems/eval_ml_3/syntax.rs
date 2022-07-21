@@ -112,6 +112,10 @@ impl Env {
             }
         }
     }
+
+    pub fn append(self, id: Ident, value: Value) -> Self {
+        Env::Segment(Box::new(self), id, value)
+    }
 }
 
 impl Value {
@@ -255,14 +259,18 @@ impl ToToken for AstNode {
             AstNode::Boolean(b) => write!(buffer, "{}", b),
             AstNode::Variable(v) => write!(buffer, "{}", v),
             AstNode::Op { lhs, op, rhs } => {
-                if matches!(lhs, box AstNode::Op {op: l_op, ..} if l_op < op) {
+                if matches!(lhs, box AstNode::Op {op: l_op, ..} if l_op < op)
+                    || matches!(lhs, box AstNode::Application { .. })
+                {
                     buffer.parenthesized(lhs)?;
                 } else {
                     lhs.to_token(buffer)?;
                 }
 
                 op.to_token(buffer)?;
-                if matches!(rhs, box AstNode::Op {op: r_op, ..} if r_op < op) {
+                if matches!(rhs, box AstNode::Op {op: l_op, ..} if l_op < op)
+                    || matches!(rhs, box AstNode::Application { .. })
+                {
                     buffer.parenthesized(rhs)
                 } else {
                     rhs.to_token(buffer)
@@ -298,7 +306,9 @@ impl ToToken for AstNode {
                 f.to_token(buffer)?;
                 if matches!(
                     p,
-                    box AstNode::Application { .. } | box AstNode::Function { .. }
+                    box AstNode::Application { .. }
+                        | box AstNode::Function { .. }
+                        | box AstNode::Op { .. }
                 ) {
                     buffer.parenthesized(p)
                 } else {
@@ -311,7 +321,7 @@ impl ToToken for AstNode {
                 body,
                 expr,
             } => {
-                write!(buffer, "rec {} = fun {} ->", ident, bind)?;
+                write!(buffer, "let rec {} = fun {} ->", ident, bind)?;
                 buffer.parenthesized(body)?;
                 buffer.write_str("in")?;
                 buffer.parenthesized(expr)

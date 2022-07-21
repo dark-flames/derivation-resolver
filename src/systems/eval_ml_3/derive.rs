@@ -148,24 +148,27 @@ pub fn eval(env: &Env, node: &AstNode) -> interface::Result<(DerivationTree<Judg
             let (f_tree, f_value) = eval(env, f.as_ref())?;
             let (p_tree, p_value) = eval(env, p.as_ref())?;
 
-            let (bind, f_env, body, rule) = match &f_value {
+            let (new_env, body, rule) = match &f_value {
                 Value::Fun(box Function {
                     env: f_env,
                     bind,
                     body,
-                }) => Ok((bind.clone(), f_env.clone(), body, E_APP)),
+                }) => Ok((f_env.clone().append(bind.clone(), p_value), body, E_APP)),
                 Value::RecFun(box RecursiveFunction {
-                    ident, bind, body, ..
+                    env: f_env,
+                    ident,
+                    bind,
+                    body,
                 }) => Ok((
-                    bind.clone(),
-                    Env::Segment(Box::new(env.clone()), ident.clone(), f_value.clone()),
+                    f_env
+                        .clone()
+                        .append(ident.clone(), f_value.clone())
+                        .append(bind.clone(), p_value),
                     body,
                     E_APP_REC,
                 )),
                 _ => Err(Error::ApplyOnNonFunctionValue),
             }?;
-
-            let new_env = Env::Segment(Box::new(f_env), bind, p_value);
 
             let (app_tree, result) = eval(&new_env, body)?;
 
