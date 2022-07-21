@@ -1,6 +1,6 @@
 entry = _{SOI ~ judgement ~ EOI}
 
-judgement = {
+judgement = _{
     eval_to_judgement |
     plus_is_judgement |
     minus_is_judgement |
@@ -9,39 +9,39 @@ judgement = {
 }
 
 eval_to_judgement = {
-    env ~ V_DASH ~ term ~ EVAL_TO ~ value
+    env ~ v_dash ~ term ~ keyword_eval_to ~ value
 }
 
 plus_is_judgement = {
-    integer ~ PLUS ~ integer ~ IS ~ integer
+    integer ~ keyword_plus ~ integer ~ keyword_is ~ integer
 }
 
 minus_is_judgement = {
-    integer ~ MINUS ~ integer ~ IS ~ integer
+    integer ~ keyword_minus ~ integer ~ keyword_is ~ integer
 }
 
 times_is_judgement = {
-    integer ~ TIMES ~ integer ~ IS ~ integer
+    integer ~ keyword_times ~ integer ~ keyword_is ~ integer
 }
 
 lt_is_judgement = {
-    integer ~ LT ~ integer ~ IS ~ boolean
+    integer ~ keyword_less_than ~ integer ~ keyword_is ~ boolean
 }
 
 env = {
-    env_segment? ~ (COMMA ~ env_segment)*
+    env_segment? ~ (comma ~ env_segment)*
 }
 
 env_segment = {
-    ident ~ ASSIGN ~ value
+    ident ~ assign ~ value
 }
 
-atom_term = { integer | boolean | ident | L_PAREN ~ term ~ R_PAREN }
-op_term = { atom_term ~(OP ~ atom_term) * }
-if_term = { IF ~ term ~ THEN ~ term ~ ELSE ~ term }
-let_in_term = { LET ~ ident ~ ASSIGN ~ term ~ IN ~ term }
-fun_term = { FUN ~ ident ~ ARROW ~ term }
-let_rec_in_term = { LET ~ REC ~ ident ~ ASSIGN ~ fun_term ~ IN ~ term }
+atom_term = { integer | boolean | ident | l_paren ~ term ~ r_paren }
+op_term = { atom_term ~(op ~ atom_term) * }
+if_term = { keyword_if ~ term ~ keyword_then ~ term ~ keyword_else ~ term }
+let_in_term = { keyword_let ~ ident ~ assign ~ term ~ keyword_in ~ term }
+fun_term = { keyword_fun ~ ident ~ arrow ~ term }
+let_rec_in_term = { keyword_let ~ keyword_rec ~ ident ~ assign ~ fun_term ~ keyword_in ~ term }
 
 term_without_app = {
     op_term |
@@ -62,50 +62,50 @@ value = {
 }
 
 value_fun = {
-   L_PAREN ~ env ~ R_PAREN ~ L_BRACKET ~ FUN ~ ident ~ ARROW ~ term ~ R_PAREN
+   l_paren ~ env ~ r_paren ~ l_bracket ~ keyword_fun ~ ident ~ arrow ~ term ~ r_paren
 }
 
 value_rec_fun = {
-    L_PAREN ~ env ~ R_PAREN ~ L_BRACKET ~ REC ~ ident ~ ASSIGN ~ FUN ~ ident ~ ARROW ~ term ~ R_PAREN
+    l_paren ~ env ~ r_paren ~ l_bracket ~ keyword_rec ~ ident ~ assign ~ keyword_fun ~ ident ~ arrow ~ term ~ r_paren
 }
 
 digit = _{ '0'..'9' }
 unsigned_int = @{ digit ~ (digit)* }
 integer = @{ "-"? ~ unsigned_int }
 ident = @{ !(keyword  ~ WHITESPACE) ~ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
-boolean = @{ TRUE | FALSE }
+boolean = @{ keyword_true | keyword_false }
 
 // Keyword
-keyword = { FUN | REC | IF | THEN | ELSE | LET | IN | EVAL_TO | IS | PLUS | MINUS | TIMES | TRUE | FALSE }
-FUN = _{"fun"}
-REC = _{"rec"}
-IF = _{"if"}
-THEN = _{"then"}
-ELSE = _{"else"}
-LET = _{"let"}
-IN = _{"in"}
-EVAL_TO = _{"evalto"}
-IS = _{"is"}
-PLUS = _{"plus"}
-MINUS = _{"minus"}
-TIMES = _{"times"}
-LT = _{"less" ~ "than"}
-TRUE = @{"true"}
-FALSE = @{"false"}
+keyword = { keyword_fun | keyword_rec | keyword_if | keyword_then | keyword_else | keyword_let | keyword_in | keyword_eval_to | keyword_is | keyword_plus | keyword_minus | keyword_times | keyword_true | keyword_false }
+keyword_fun = _{"fun"}
+keyword_rec = _{"rec"}
+keyword_if = _{"if"}
+keyword_then = _{"then"}
+keyword_else = _{"else"}
+keyword_let = _{"let"}
+keyword_in = _{"in"}
+keyword_eval_to = _{"evalto"}
+keyword_is = _{"is"}
+keyword_plus = _{"plus"}
+keyword_minus = _{"minus"}
+keyword_times = _{"times"}
+keyword_less_than = _{"less" ~ "than"}
+keyword_true = @{"true"}
+keyword_false = @{"false"}
 
 /// Red
-ARROW = _{"->"}
-ASSIGN = _{"="}
-V_DASH = _{"|-"}
-L_PAREN = _{"("}
-R_PAREN = _{")"}
-L_BRACKET = _{"["}
-R_BRACKET = _{"]"}
-COMMA = _{","}
-OP = _{ OP_PLUS | OP_MINUS | OP_TIMES | OP_LT }
-OP_PLUS = {"+"}
-OP_MINUS = {"-"}
-OP_TIMES = {"*"}
-OP_LT = {"<"}
+arrow = _{"->"}
+assign = _{"="}
+v_dash = _{"|-"}
+l_paren = _{"("}
+r_paren = _{")"}
+l_bracket = _{"["}
+r_bracket = _{"]"}
+comma = _{","}
+op = _{ op_plus | op_minus | op_times | op_lt }
+op_plus = {"+"}
+op_minus = {"-"}
+op_times = {"*"}
+op_lt = {"<"}
 
 WHITESPACE = _{ " " | "\t" }

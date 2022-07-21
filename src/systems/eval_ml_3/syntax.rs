@@ -1,11 +1,11 @@
 use crate::error::Error;
 use crate::interface::{Judgement as JudgementTrait, Result, Syntax};
 use crate::print::{ToToken, TokenBuffer};
-use crate::systems::eval_ml_3::syntax::Judgement::{LessThan, MinusIs, PlusIs, TimesIs};
+use crate::systems::eval_ml_3::syntax::Judgement::{LtIs, MinusIs, PlusIs, TimesIs};
 use std::cmp::Ordering;
 use std::fmt::{Result as FmtResult, Write};
 
-pub type Var = String;
+pub type Ident = String;
 
 #[derive(Clone, Eq, PartialEq)]
 pub enum Env {
@@ -16,15 +16,15 @@ pub enum Env {
 #[derive(Clone, Eq, PartialEq)]
 pub struct Function {
     pub env: Env,
-    pub bind: Var,
+    pub bind: Ident,
     pub body: BoxedNode,
 }
 
 #[derive(Clone, Eq, PartialEq)]
 pub struct RecursiveFunction {
     pub env: Env,
-    pub ident: Var,
-    pub bind: Var,
+    pub ident: Ident,
+    pub bind: Ident,
     pub body: BoxedNode,
 }
 
@@ -50,7 +50,7 @@ pub type BoxedNode = Box<AstNode>;
 pub enum AstNode {
     Integer(i64),
     Boolean(bool),
-    Variable(Var),
+    Variable(Ident),
     Op {
         lhs: BoxedNode,
         op: Op,
@@ -62,12 +62,12 @@ pub enum AstNode {
         f_branch: BoxedNode,
     },
     LetInTerm {
-        ident: Var,
+        ident: Ident,
         expr_1: BoxedNode,
         expr_2: BoxedNode,
     },
     Function {
-        bind: Var,
+        bind: Ident,
         body: BoxedNode,
     },
     Application {
@@ -75,8 +75,8 @@ pub enum AstNode {
         p: BoxedNode,
     },
     LetRecIn {
-        ident: Var,
-        bind: Var,
+        ident: Ident,
+        bind: Ident,
         body: BoxedNode,
         expr: BoxedNode,
     },
@@ -91,7 +91,7 @@ pub enum Judgement {
     PlusIs(i64, i64, i64),
     MinusIs(i64, i64, i64),
     TimesIs(i64, i64, i64),
-    LessThan(i64, i64, bool),
+    LtIs(i64, i64, bool),
 }
 
 impl Value {
@@ -152,7 +152,7 @@ impl Judgement {
             Op::Plus => PlusIs(a.try_get_int()?, b.try_get_int()?, c.try_get_int()?),
             Op::Minus => MinusIs(a.try_get_int()?, b.try_get_int()?, c.try_get_int()?),
             Op::Times => TimesIs(a.try_get_int()?, b.try_get_int()?, c.try_get_int()?),
-            Op::Lt => LessThan(a.try_get_int()?, b.try_get_int()?, c.try_get_bool()?),
+            Op::Lt => LtIs(a.try_get_int()?, b.try_get_int()?, c.try_get_bool()?),
         })
     }
 }
@@ -303,7 +303,7 @@ impl ToToken for Judgement {
             PlusIs(a, b, c) => write!(buffer, "{} plus {} is {}", a, b, c),
             MinusIs(a, b, c) => write!(buffer, "{} minus {} is {}", a, b, c),
             TimesIs(a, b, c) => write!(buffer, "{} times {} is {}", a, b, c),
-            LessThan(a, b, c) => write!(buffer, "{} less than {} is {}", a, b, c),
+            LtIs(a, b, c) => write!(buffer, "{} less than {} is {}", a, b, c),
         }
     }
 }
