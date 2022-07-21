@@ -1,6 +1,6 @@
 use crate::interface::{Parse, ParseAs, ParseNextAs};
 use crate::systems::eval_ml_3::syntax::{
-    AstNode, Env, Function, Ident, Judgement, RecursiveFunction, Value,
+    AstNode, Env, EvalToJudgement, Function, Ident, Judgement, Op, RecursiveFunction, Value,
 };
 use crate::utils::error_span;
 use lazy_static::lazy_static;
@@ -98,6 +98,80 @@ impl Parse<Rule> for AstNode {
         Self: Sized,
     {
         match entry_pair.as_rule() {
+            Rule::integer => entry_pair.parse_as().map(AstNode::Integer),
+            Rule::boolean => entry_pair.parse_as().map(AstNode::Boolean),
+            Rule::ident => entry_pair.parse_as().map(AstNode::Variable),
+            Rule::atom_term => {
+                let span = entry_pair.as_span();
+                entry_pair.into_inner().parse_next_as(span)
+            }
+            Rule::ap_term => {
+                let span = entry_pair.as_span();
+                let mut inner = entry_pair.into_inner();
+                let init = inner.parse_next_as(span.clone());
+
+                inner.fold(init, |lhs, current| {
+                    lhs.and_then(move |l| {
+                        Ok(AstNode::Application {
+                            f: Box::new(l),
+                            p: Box::new(current.parse_as()?),
+                        })
+                    })
+                })
+            }
+            Rule::op_term => PREC_CLIMBER.climb(
+                entry_pair.into_inner(),
+                |pair| pair.parse_as(),
+                |lhs, op, rhs| {
+                    Ok(AstNode::Op {
+                        lhs: Box::new(lhs?),
+                        op: match op.as_rule() {
+                            Rule::op_plus => Op::Plus,
+                            Rule::op_minus => Op::Minus,
+                            Rule::op_times => Op::Times,
+                            Rule::op_lt => Op::Lt,
+                            _ => unreachable!(),
+                        },
+                        rhs: Box::new(rhs?),
+                    })
+                },
+            ),
+            Rule::if_term => {
+                let span = entry_pair.as_span();
+                let mut inner = entry_pair.into_inner();
+                Ok(AstNode::IfTerm {
+                    cond: Box::new(inner.parse_next_as(span.clone())?),
+                    t_branch: Box::new(inner.parse_next_as(span.clone())?),
+                    f_branch: Box::new(inner.parse_next_as(span.clone())?),
+                })
+            }
+            Rule::let_in_term => {
+                let span = entry_pair.as_span();
+                let mut inner = entry_pair.into_inner();
+                Ok(AstNode::LetInTerm {
+                    ident: inner.parse_next_as(span.clone())?,
+                    expr_1: Box::new(inner.parse_next_as(span.clone())?),
+                    expr_2: Box::new(inner.parse_next_as(span.clone())?),
+                })
+            }
+            Rule::fun_term => {
+                let span = entry_pair.as_span();
+                let mut inner = entry_pair.into_inner();
+                Ok(AstNode::Function {
+                    bind: inner.parse_next_as(span.clone())?,
+                    body: Box::new(inner.parse_next_as(span.clone())?),
+                })
+            }
+            Rule::let_rec_in_term => {
+                let span = entry_pair.as_span();
+                let mut inner = entry_pair.into_inner();
+                Ok(AstNode::LetRecIn {
+                    ident: inner.parse_next_as(span.clone())?,
+                    bind: inner.parse_next_as(span.clone())?,
+                    body: Box::new(inner.parse_next_as(span.clone())?),
+                    expr: Box::new(inner.parse_next_as(span.clone())?),
+                })
+            }
             _ => unreachable!(),
         }
     }
@@ -114,11 +188,11 @@ impl Parse<Rule> for Judgement {
             Rule::eval_to_judgement => {
                 let mut inner_rules: Pairs<Rule> = entry_pair.into_inner();
 
-                Ok(Judgement::EvalTo {
-                    env: inner_rules.parse_next_as(entry_span.clone())?,
-                    term: inner_rules.parse_next_as(entry_span.clone())?,
-                    value: inner_rules.parse_next_as(entry_span)?,
-                })
+                Ok(Judgement::EvalTo(EvalToJudgement::new(
+                    inner_rules.parse_next_as(entry_span.clone())?,
+                    inner_rules.parse_next_as(entry_span.clone())?,
+                    inner_rules.parse_next_as(entry_span)?,
+                )))
             }
             Rule::plus_is_judgement | Rule::minus_is_judgement | Rule::times_is_judgement => {
                 let mut inner_rules: Pairs<Rule> = entry_pair.into_inner();

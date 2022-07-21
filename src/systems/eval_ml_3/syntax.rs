@@ -1,26 +1,27 @@
 use crate::error::Error;
-use crate::interface::{Judgement as JudgementTrait, Result, Syntax};
+use crate::interface::{Judgement as JudgementTrait, Result};
 use crate::print::{ToToken, TokenBuffer};
+use crate::systems::eval_ml_3::rules::*;
 use crate::systems::eval_ml_3::syntax::Judgement::{LtIs, MinusIs, PlusIs, TimesIs};
 use std::cmp::Ordering;
 use std::fmt::{Result as FmtResult, Write};
 
 pub type Ident = String;
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub enum Env {
     Terminal,
     Segment(Box<Env>, String, Value),
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Function {
     pub env: Env,
     pub bind: Ident,
     pub body: BoxedNode,
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct RecursiveFunction {
     pub env: Env,
     pub ident: Ident,
@@ -28,7 +29,7 @@ pub struct RecursiveFunction {
     pub body: BoxedNode,
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub enum Value {
     Integer(i64),
     Boolean(bool),
@@ -36,7 +37,7 @@ pub enum Value {
     RecFun(Box<RecursiveFunction>),
 }
 
-#[derive(Clone, Copy, Eq, PartialEq, Ord)]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, Debug)]
 pub enum Op {
     Plus,
     Minus,
@@ -46,7 +47,7 @@ pub enum Op {
 
 pub type BoxedNode = Box<AstNode>;
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub enum AstNode {
     Integer(i64),
     Boolean(bool),
@@ -82,16 +83,20 @@ pub enum AstNode {
     },
 }
 
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub enum Judgement {
-    EvalTo {
-        env: Env,
-        term: AstNode,
-        value: Value,
-    },
+    EvalTo(EvalToJudgement),
     PlusIs(i64, i64, i64),
     MinusIs(i64, i64, i64),
     TimesIs(i64, i64, i64),
     LtIs(i64, i64, bool),
+}
+
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct EvalToJudgement {
+    pub env: Env,
+    pub term: AstNode,
+    pub value: Value,
 }
 
 impl Value {
@@ -121,6 +126,15 @@ impl Op {
             Op::Lt => Value::Boolean(lhs.try_get_int()? < rhs.try_get_int()?),
         })
     }
+
+    pub fn to_rule(&self) -> &'static str {
+        match self {
+            Op::Plus => B_PLUS,
+            Op::Minus => B_MINUS,
+            Op::Times => B_TIMES,
+            Op::Lt => B_LT,
+        }
+    }
 }
 
 impl PartialOrd for Op {
@@ -140,10 +154,12 @@ impl PartialOrd for Op {
     }
 }
 
-impl Syntax for AstNode {}
+impl JudgementTrait for Judgement {}
 
-impl JudgementTrait for Judgement {
-    type S = AstNode;
+impl EvalToJudgement {
+    pub fn new(env: Env, term: AstNode, value: Value) -> Self {
+        EvalToJudgement { env, term, value }
+    }
 }
 
 impl Judgement {
@@ -290,16 +306,20 @@ impl ToToken for AstNode {
     }
 }
 
+impl ToToken for EvalToJudgement {
+    fn to_token(&self, buffer: &mut TokenBuffer) -> FmtResult {
+        self.env.to_token(buffer)?;
+        buffer.write_str("|-")?;
+        self.term.to_token(buffer)?;
+        buffer.write_str("evalto")?;
+        self.value.to_token(buffer)
+    }
+}
+
 impl ToToken for Judgement {
     fn to_token(&self, buffer: &mut TokenBuffer) -> FmtResult {
         match self {
-            Judgement::EvalTo { env, term, value } => {
-                env.to_token(buffer)?;
-                buffer.write_str("|-")?;
-                term.to_token(buffer)?;
-                buffer.write_str("evalto")?;
-                value.to_token(buffer)
-            }
+            Judgement::EvalTo(eval_to) => eval_to.to_token(buffer),
             PlusIs(a, b, c) => write!(buffer, "{} plus {} is {}", a, b, c),
             MinusIs(a, b, c) => write!(buffer, "{} minus {} is {}", a, b, c),
             TimesIs(a, b, c) => write!(buffer, "{} times {} is {}", a, b, c),

@@ -1,8 +1,59 @@
 use crate::error::Error;
-use crate::interface;
-use crate::interface::DerivationTree;
+use crate::interface::{Derivable, DerivationTree};
 use crate::systems::eval_ml_3::rules::*;
 use crate::systems::eval_ml_3::syntax::*;
+use crate::{interface, ToToken};
+
+impl Derivable for Judgement {
+    fn derive(self) -> interface::Result<DerivationTree<Self>>
+    where
+        Self: Sized,
+    {
+        if let Judgement::EvalTo(eval_to) = self {
+            let (tree, value) = eval(&eval_to.env, &eval_to.term)?;
+
+            if value == eval_to.value {
+                Ok(tree)
+            } else {
+                Err(Error::AssertionError(
+                    eval_to.term.token_buffer(1)?.format(2),
+                    value.token_buffer(0)?.format_inline(),
+                    eval_to.value.token_buffer(0)?.format_inline(),
+                ))
+            }
+        } else {
+            let op = match self {
+                Judgement::PlusIs(a, b, c) if a + b == c => Ok(Op::Plus),
+                Judgement::PlusIs(a, b, c) => Err(Error::AssertionError(
+                    format!("{} plus {}", a, b),
+                    c.to_string(),
+                    (a + b).to_string(),
+                )),
+                Judgement::MinusIs(a, b, c) if a - b == c => Ok(Op::Minus),
+                Judgement::MinusIs(a, b, c) => Err(Error::AssertionError(
+                    format!("{} minus {}", a, b),
+                    c.to_string(),
+                    (a - b).to_string(),
+                )),
+                Judgement::TimesIs(a, b, c) if a * b == c => Ok(Op::Times),
+                Judgement::TimesIs(a, b, c) => Err(Error::AssertionError(
+                    format!("{} plus {}", a, b),
+                    c.to_string(),
+                    (a + b).to_string(),
+                )),
+                Judgement::LtIs(a, b, c) if (a < b) == c => Ok(Op::Lt),
+                Judgement::LtIs(a, b, c) => Err(Error::AssertionError(
+                    format!("{} plus {}", a, b),
+                    c.to_string(),
+                    (a < b).to_string(),
+                )),
+                _ => unreachable!(),
+            }?;
+
+            Ok(DerivationTree::new(self, op.to_rule(), vec![]))
+        }
+    }
+}
 
 pub fn eval(env: &Env, node: &AstNode) -> interface::Result<(DerivationTree<Judgement>, Value)> {
     let (reason, premises, value) = match node {
@@ -23,7 +74,7 @@ pub fn eval(env: &Env, node: &AstNode) -> interface::Result<(DerivationTree<Judg
             Ok((
                 match op {
                     Op::Plus => E_PLUS,
-                    Op::Minus => E_BOOL,
+                    Op::Minus => E_MINUS,
                     Op::Times => E_TIMES,
                     Op::Lt => E_LT,
                 },
@@ -32,12 +83,7 @@ pub fn eval(env: &Env, node: &AstNode) -> interface::Result<(DerivationTree<Judg
                     rhs_tree,
                     DerivationTree::new(
                         Judgement::from_op(*op, &lhs_value, &rhs_value, &result)?,
-                        match op {
-                            Op::Plus => B_PLUS,
-                            Op::Minus => B_MINUS,
-                            Op::Times => B_TIMES,
-                            Op::Lt => B_LT,
-                        },
+                        op.to_rule(),
                         vec![],
                     ),
                 ],
@@ -129,11 +175,11 @@ pub fn eval(env: &Env, node: &AstNode) -> interface::Result<(DerivationTree<Judg
 
     Ok((
         DerivationTree::new(
-            Judgement::EvalTo {
-                env: env.clone(),
-                term: node.clone(),
-                value: value.clone(),
-            },
+            Judgement::EvalTo(EvalToJudgement::new(
+                env.clone(),
+                node.clone(),
+                value.clone(),
+            )),
             reason,
             premises,
         ),

@@ -1,9 +1,18 @@
+use crate::error::Error;
 use std::fmt::{Error as FmtError, Result as FmtResult, Write};
 use std::iter::repeat;
 use std::mem::replace;
 
 pub trait ToToken {
     fn to_token(&self, buffer: &mut TokenBuffer) -> FmtResult;
+
+    fn token_buffer(&self, ident: usize) -> Result<TokenBuffer, Error> {
+        let mut buffer = TokenBuffer::new(ident);
+        self.to_token(&mut buffer)
+            .map_err(|e| Error::ToTokenError(e.to_string()))?;
+        buffer.commit_line(false)?;
+        Ok(buffer)
+    }
 }
 
 pub struct TokenBuffer {
@@ -66,6 +75,14 @@ impl TokenBuffer {
             })
             .collect::<Vec<String>>()
             .join("\n")
+    }
+
+    pub fn format_inline(&self) -> String {
+        self.tokens
+            .iter()
+            .map(|(_, tokens)| tokens.join(" "))
+            .collect::<Vec<String>>()
+            .join("")
     }
 
     pub fn parenthesized_by(

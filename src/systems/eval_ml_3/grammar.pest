@@ -43,7 +43,7 @@ let_in_term = { keyword_let ~ ident ~ assign ~ term ~ keyword_in ~ term }
 fun_term = { keyword_fun ~ ident ~ arrow ~ term }
 let_rec_in_term = { keyword_let ~ keyword_rec ~ ident ~ assign ~ fun_term ~ keyword_in ~ term }
 
-term_without_app = {
+non_ap_term = _{
     op_term |
     if_term |
     let_in_term |
@@ -51,7 +51,11 @@ term_without_app = {
     let_rec_in_term
 }
 
-term = { term_without_app ~ (term)* }
+ap_term = { non_ap_term ~ (non_ap_term)* }
+
+term = _{
+    ap_term
+}
 
 
 value = {
@@ -72,7 +76,7 @@ value_rec_fun = {
 digit = _{ '0'..'9' }
 unsigned_int = @{ digit ~ (digit)* }
 integer = @{ "-"? ~ unsigned_int }
-ident = @{ !(keyword  ~ WHITESPACE) ~ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
+ident = @{ !(keyword) ~ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
 boolean = @{ keyword_true | keyword_false }
 
 // Keyword

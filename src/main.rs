@@ -4,7 +4,7 @@
 extern crate pest_derive;
 extern crate pest;
 
-use crate::print::{ToToken, TokenBuffer};
+use crate::print::ToToken;
 
 mod error;
 mod interface;
@@ -18,35 +18,18 @@ fn main() {
 
 #[test]
 fn test() {
-    use systems::eval_ml_3::eval::eval;
-    use systems::eval_ml_3::syntax::*;
+    use interface::System;
+    use print::ToToken;
+    use systems::eval_ml_3::EvalML3;
 
-    let env = Env::Terminal;
-    let node = AstNode::LetInTerm {
-        ident: "sq".to_string(),
-        expr_1: Box::new(AstNode::Function {
-            bind: "x".to_string(),
-            body: Box::new(AstNode::Op {
-                lhs: Box::new(AstNode::Variable("x".to_string())),
-                op: Op::Times,
-                rhs: Box::new(AstNode::Variable("x".to_string())),
-            }),
-        }),
-        expr_2: Box::new(AstNode::Op {
-            lhs: Box::new(AstNode::Application {
-                f: Box::new(AstNode::Variable("sq".to_string())),
-                p: Box::new(AstNode::Integer(3)),
-            }),
-            op: Op::Plus,
-            rhs: Box::new(AstNode::Application {
-                f: Box::new(AstNode::Variable("sq".to_string())),
-                p: Box::new(AstNode::Integer(4)),
-            }),
-        }),
-    };
+    let buffer = EvalML3::derive(
+        "|- let twice = fun f -> fun x -> f (f x) in twice twice (fun x -> x * x) 2 evalto 65536",
+    )
+    .and_then(|t| t.token_buffer(0));
 
-    let (derivation_tree, _) = eval(&env, &node).unwrap();
-    let mut buffer = TokenBuffer::default();
-    derivation_tree.to_token(&mut buffer).unwrap();
-    print!("{}", buffer.format(2));
+    if let Err(e) = &buffer {
+        println!("{}", e.to_string())
+    }
+
+    print!("{}", buffer.unwrap().format(2));
 }

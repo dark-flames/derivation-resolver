@@ -12,11 +12,18 @@ use std::str::FromStr;
 pub type Result<T> = StdResult<T, Error>;
 pub type RuleName = &'static str;
 
-pub trait Syntax: ToToken {}
-
-pub trait Judgement: ToToken {
-    type S: Syntax;
+pub trait System {
+    type Judgement: Judgement;
+    fn derive(src: &str) -> Result<DerivationTree<Self::Judgement>>;
 }
+
+pub trait Derivable: Judgement {
+    fn derive(self) -> Result<DerivationTree<Self>>
+    where
+        Self: Sized;
+}
+
+pub trait Judgement: ToToken {}
 
 pub trait Parse<R: RuleType> {
     fn parse(entry_pair: Pair<R>) -> StdResult<Self, PestError<R>>
