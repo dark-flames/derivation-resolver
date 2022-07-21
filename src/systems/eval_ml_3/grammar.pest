@@ -36,25 +36,25 @@ env_segment = {
     ident ~ assign ~ value
 }
 
+fun_term = { keyword_fun ~ ident ~ arrow ~ term }
 atom_term = { integer | boolean | ident | l_paren ~ term ~ r_paren }
-op_term = { atom_term ~(op ~ atom_term) * }
+ap_term = { non_ap_term ~ (non_ap_term)* }
+op_term = { ap_term ~(op ~ ap_term) * }
 if_term = { keyword_if ~ term ~ keyword_then ~ term ~ keyword_else ~ term }
 let_in_term = { keyword_let ~ ident ~ assign ~ term ~ keyword_in ~ term }
-fun_term = { keyword_fun ~ ident ~ arrow ~ term }
 let_rec_in_term = { keyword_let ~ keyword_rec ~ ident ~ assign ~ fun_term ~ keyword_in ~ term }
 
 non_ap_term = _{
-    op_term |
-    if_term |
-    let_in_term |
-    fun_term |
-    let_rec_in_term
+    atom_term |
+    fun_term
 }
 
-ap_term = { non_ap_term ~ (non_ap_term)* }
-
 term = _{
-    ap_term
+    op_term |
+    ap_term |
+    if_term |
+    let_rec_in_term |
+    let_in_term
 }
 
 
@@ -66,11 +66,11 @@ value = {
 }
 
 value_fun = {
-   l_paren ~ env ~ r_paren ~ l_bracket ~ keyword_fun ~ ident ~ arrow ~ term ~ r_paren
+   l_paren ~ env ~ r_paren ~ l_bracket ~ keyword_fun ~ ident ~ arrow ~ term ~ r_bracket
 }
 
 value_rec_fun = {
-    l_paren ~ env ~ r_paren ~ l_bracket ~ keyword_rec ~ ident ~ assign ~ keyword_fun ~ ident ~ arrow ~ term ~ r_paren
+    l_paren ~ env ~ r_paren ~ l_bracket ~ keyword_rec ~ ident ~ assign ~ keyword_fun ~ ident ~ arrow ~ term ~ r_bracket
 }
 
 digit = _{ '0'..'9' }
@@ -112,4 +112,4 @@ op_minus = {"-"}
 op_times = {"*"}
 op_lt = {"<"}
 
-WHITESPACE = _{ " " | "\t" }
+WHITESPACE = _{ " " | "\t" | "\n" }

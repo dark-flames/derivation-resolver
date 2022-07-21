@@ -97,6 +97,25 @@ impl TokenBuffer {
     pub fn parenthesized(&mut self, obj: &impl ToToken) -> FmtResult {
         self.parenthesized_by(|b| obj.to_token(b))
     }
+
+    pub fn write_by_iter<I>(
+        &mut self,
+        iter: impl IntoIterator<Item = I>,
+        op: impl Fn(I, &mut TokenBuffer) -> FmtResult,
+        join: impl Fn(&mut TokenBuffer) -> FmtResult,
+    ) -> FmtResult {
+        iter.into_iter()
+            .enumerate()
+            .fold(Ok(self), |c, (index, item)| {
+                if index == 0 {
+                    c
+                } else {
+                    c.and_then(|b| join(b).map(|_| b))
+                }
+                .and_then(|b| op(item, b).map(|_| b))
+            })
+            .map(|_| ())
+    }
 }
 
 impl Write for TokenBuffer {

@@ -4,16 +4,30 @@
 extern crate pest_derive;
 extern crate pest;
 
-use crate::print::ToToken;
-
 mod error;
 mod interface;
 mod print;
 mod systems;
 mod utils;
 
+use crate::interface::System;
+use crate::print::ToToken;
+use std::env::args;
+use std::fs::read_to_string;
+use systems::DerivationSystem;
+
 fn main() {
-    println!("Hello, world!");
+    let mut args = args();
+    args.next();
+    let file = args.next().expect("No input file").to_string();
+    let source = read_to_string(file.as_str()).expect("Unable to read the input file");
+
+    let buffer = DerivationSystem::derive(source.as_str()).and_then(|t| t.token_buffer(0));
+
+    match buffer {
+        Ok(b) => print!("{}", b.format(2)),
+        Err(e) => eprintln!("{}", e),
+    };
 }
 
 #[test]

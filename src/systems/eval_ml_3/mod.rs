@@ -3,7 +3,7 @@ use crate::pest::Parser;
 use crate::systems::eval_ml_3::parser::ASTParser;
 use crate::systems::eval_ml_3::syntax::Judgement;
 use pest::iterators::Pairs;
-use pest::Span;
+use pest::Position;
 
 pub mod derive;
 pub mod parser;
@@ -17,7 +17,7 @@ impl System for EvalML3 {
 
     fn derive(src: &str) -> crate::interface::Result<DerivationTree<Self::Judgement>> {
         let mut pairs: Pairs<parser::Rule> = ASTParser::parse(parser::Rule::entry, src)?;
-        let judgement: Judgement = pairs.parse_next_as(Span::new(src, 0, src.len()).unwrap())?;
+        let judgement: Judgement = pairs.parse_next(Position::new(src, 0).unwrap())?;
 
         judgement.derive()
     }

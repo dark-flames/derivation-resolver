@@ -1,13 +1,12 @@
 use crate::error::Error;
 use crate::print::{ToToken, TokenBuffer};
-use crate::utils::error_span;
+use crate::utils::error_pos;
 use pest::error::Error as PestError;
 use pest::iterators::{Pair, Pairs};
-use pest::{RuleType, Span};
+use pest::{Position, RuleType};
 use std::any::type_name;
 use std::fmt::{Result as fmtResult, Write};
 use std::result::Result as StdResult;
-use std::str::FromStr;
 
 pub type Result<T> = StdResult<T, Error>;
 pub type RuleName = &'static str;
@@ -31,14 +30,20 @@ pub trait Parse<R: RuleType> {
         Self: Sized;
 }
 
-pub trait ParseAs<R: RuleType, T: Sized> {
-    fn parse_as(self) -> StdResult<T, PestError<R>>
+pub trait ParseAs<'i, R: RuleType, T: Sized> {
+    fn parse(self) -> StdResult<T, PestError<R>>
+    where
+        Self: Sized;
+
+    fn parse_with_pos(self) -> StdResult<(T, Position<'i>), PestError<R>>
     where
         Self: Sized;
 }
 
-pub trait ParseNextAs<R: RuleType, T: Sized> {
-    fn parse_next_as(&mut self, span: Span) -> StdResult<T, PestError<R>>;
+pub trait ParseNextAs<'i, R: RuleType, T: Sized> {
+    fn parse_next(&mut self, pos: Position) -> StdResult<T, PestError<R>>;
+
+    fn parse_next_with_pos(&mut self, pos: Position) -> StdResult<(T, Position<'i>), PestError<R>>;
 }
 
 pub struct DerivationTree<J: Judgement> {
@@ -77,33 +82,52 @@ impl<J: Judgement> ToToken for DerivationTree<J> {
     }
 }
 
-impl<R: RuleType, T: FromStr> Parse<R> for T {
+impl<R: RuleType, T: Parse<R>> Parse<R> for Box<T> {
     fn parse(entry_pair: Pair<R>) -> StdResult<Self, PestError<R>>
     where
         Self: Sized,
     {
-        entry_pair.as_str().parse().map_err(|_| {
-            error_span(
-                entry_pair.as_span(),
-                format!("expect a/an {} here", type_name::<T>()),
-            )
-        })
+        entry_pair.parse().map(Box::new)
     }
 }
 
-impl<'i, R: RuleType, T: Parse<R>> ParseAs<R, T> for Pair<'i, R> {
-    fn parse_as(self) -> StdResult<T, PestError<R>>
+impl<'i, R: RuleType, T: Parse<R>> ParseAs<'i, R, T> for Pair<'i, R> {
+    fn parse(self) -> StdResult<T, PestError<R>>
     where
         Self: Sized,
     {
         T::parse(self)
     }
+
+    fn parse_with_pos(self) -> StdResult<(T, Position<'i>), PestError<R>>
+    where
+        Self: Sized,
+    {
+        let pos = self.as_span().end_pos();
+        T::parse(self).map(move |r| (r, pos))
+    }
 }
 
-impl<'i, R: RuleType, T: Parse<R>> ParseNextAs<R, T> for Pairs<'i, R> {
-    fn parse_next_as(&mut self, span: Span) -> StdResult<T, PestError<R>> {
+impl<'i, R: RuleType, T: Parse<R>> ParseNextAs<'i, R, T> for Pairs<'i, R> {
+    fn parse_next(&mut self, pos: Position) -> StdResult<T, PestError<R>> {
         self.next()
-            .ok_or_else(|| error_span(span, format!("expect a/an {} here", type_name::<T>())))?
-            .parse_as()
+            .ok_or_else(|| {
+                error_pos(
+                    pos,
+                    format!("expect a/an {} here, got nothing", type_name::<T>()),
+                )
+            })
+            .and_then(ParseAs::parse)
+    }
+
+    fn parse_next_with_pos(&mut self, pos: Position) -> StdResult<(T, Position<'i>), PestError<R>> {
+        self.next()
+            .ok_or_else(|| {
+                error_pos(
+                    pos,
+                    format!("expect a/an {} here, got nothing", type_name::<T>()),
+                )
+            })
+            .and_then(ParseAs::parse_with_pos)
     }
 }

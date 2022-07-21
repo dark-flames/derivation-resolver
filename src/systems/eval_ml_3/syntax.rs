@@ -99,6 +99,21 @@ pub struct EvalToJudgement {
     pub value: Value,
 }
 
+impl Env {
+    pub fn collect(&self) -> Vec<(&Ident, &Value)> {
+        match self {
+            Env::Terminal => vec![],
+            Env::Segment(next, id, value) => {
+                let mut result = next.collect();
+
+                result.push((id, value));
+
+                result
+            }
+        }
+    }
+}
+
 impl Value {
     pub fn try_get_int(&self) -> Result<i64> {
         if let Value::Integer(r) = self {
@@ -175,19 +190,15 @@ impl Judgement {
 
 impl ToToken for Env {
     fn to_token(&self, buffer: &mut TokenBuffer) -> FmtResult {
-        match self {
-            Env::Terminal => Ok(()),
-            Env::Segment(box Env::Terminal, id, value) => {
-                write!(buffer, "{} =", id)?;
-                value.to_token(buffer)
-            }
-            Env::Segment(next, id, value) => {
-                write!(buffer, "{} =", id)?;
-                value.to_token(buffer)?;
-                buffer.write_char(',')?;
-                next.to_token(buffer)
-            }
-        }
+        buffer.write_by_iter(
+            self.collect(),
+            |(id, value), b| {
+                b.write_str(id)?;
+                b.write_char('=')?;
+                value.to_token(b)
+            },
+            |b| b.write_char(','),
+        )
     }
 }
 
@@ -285,7 +296,10 @@ impl ToToken for AstNode {
             }
             AstNode::Application { f, p } => {
                 f.to_token(buffer)?;
-                if matches!(p, box AstNode::Application { .. }) {
+                if matches!(
+                    p,
+                    box AstNode::Application { .. } | box AstNode::Function { .. }
+                ) {
                     buffer.parenthesized(p)
                 } else {
                     p.to_token(buffer)
