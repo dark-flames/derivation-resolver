@@ -1,8 +1,10 @@
 use crate::interface::{Parse, ParseAs, ParseNextAs};
-use crate::systems::eval_ml_3::syntax::{AstNode, Env, Ident, Judgement, Value};
+use crate::systems::eval_ml_3::syntax::{
+    AstNode, Env, Function, Ident, Judgement, RecursiveFunction, Value,
+};
 use crate::utils::error_span;
 use lazy_static::lazy_static;
-use pest::error::{Error, ErrorVariant};
+use pest::error::Error;
 use pest::iterators::{Pair, Pairs};
 use pest::prec_climber::{Assoc, Operator, PrecClimber};
 use std::result::Result as StdResult;
@@ -56,20 +58,48 @@ impl Parse<Rule> for Env {
 }
 
 impl Parse<Rule> for Value {
-    fn parse(_entry_pair: Pair<Rule>) -> Result<Self>
+    fn parse(entry_pair: Pair<Rule>) -> Result<Self>
     where
         Self: Sized,
     {
-        todo!()
+        let pair = entry_pair.into_inner().next().unwrap();
+        let span = pair.as_span();
+
+        match pair.as_rule() {
+            Rule::integer => pair.parse_as().map(Value::Integer),
+            Rule::boolean => pair.parse_as().map(Value::Integer),
+            Rule::value_fun => {
+                let mut inner = pair.into_inner();
+
+                Ok(Value::Fun(Box::new(Function {
+                    env: inner.parse_next_as(span.clone())?,
+                    bind: inner.parse_next_as(span.clone())?,
+                    body: Box::new(inner.parse_next_as(span.clone())?),
+                })))
+            }
+            Rule::value_rec_fun => {
+                let mut inner = pair.into_inner();
+
+                Ok(Value::RecFun(Box::new(RecursiveFunction {
+                    env: inner.parse_next_as(span.clone())?,
+                    ident: inner.parse_next_as(span.clone())?,
+                    bind: inner.parse_next_as(span.clone())?,
+                    body: Box::new(inner.parse_next_as(span.clone())?),
+                })))
+            }
+            _ => unreachable!(),
+        }
     }
 }
 
 impl Parse<Rule> for AstNode {
-    fn parse(_entry_pair: Pair<Rule>) -> Result<Self>
+    fn parse(entry_pair: Pair<Rule>) -> Result<Self>
     where
         Self: Sized,
     {
-        todo!()
+        match entry_pair.as_rule() {
+            _ => unreachable!(),
+        }
     }
 }
 
