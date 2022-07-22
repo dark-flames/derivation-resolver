@@ -1,7 +1,12 @@
-use crate::interface::{Parse, ParseAs, ParseNextAs};
-use crate::systems::eval_ml_3::syntax::{
-    AstNode, Env, EvalToJudgement, Function, Ident, Judgement, Op, RecursiveFunction, Value,
+use crate::derive::{Parse, ParseAs, ParseNextAs};
+use crate::systems::common::env::NamedEnv;
+use crate::systems::common::judgement::{EvalToJudgement, Judgement};
+use crate::systems::common::syntax::{
+    ApplicationNode, BooleanNode, FunctionNode, Ident, IfNode, IntegerNode, LetInNode,
+    LetRecInNode, Op, OpNode, VariableNode,
 };
+use crate::systems::common::value::{Function, RecursiveFunction, Value};
+use crate::systems::eval_ml_3::syntax::EvalML3Node;
 use crate::utils::error_span;
 use lazy_static::lazy_static;
 use pest::error::Error;
@@ -29,7 +34,7 @@ lazy_static! {
     };
 }
 
-impl Parse<Rule> for Env {
+impl Parse<Rule> for NamedEnv {
     fn parse(entry_pair: Pair<Rule>) -> Result<Self>
     where
         Self: Sized,
@@ -51,8 +56,8 @@ impl Parse<Rule> for Env {
             .collect::<Result<Vec<_>>>()?
             .into_iter()
             .rev()
-            .fold(Env::Terminal, |env, (ident, value)| {
-                Env::Segment(Box::new(env), ident, value)
+            .fold(NamedEnv::Terminal, |env, (ident, value)| {
+                NamedEnv::Segment(Box::new(env), (ident, value))
             }))
     }
 }
@@ -96,16 +101,22 @@ impl Parse<Rule> for Value {
     }
 }
 
-impl Parse<Rule> for AstNode {
+impl Parse<Rule> for EvalML3Node {
     fn parse(entry_pair: Pair<Rule>) -> Result<Self>
     where
         Self: Sized,
     {
         let pos = entry_pair.as_span().start_pos();
         match entry_pair.as_rule() {
-            Rule::integer => entry_pair.parse().map(AstNode::Integer),
-            Rule::boolean => entry_pair.parse().map(AstNode::Boolean),
-            Rule::ident => entry_pair.parse().map(AstNode::Variable),
+            Rule::integer => entry_pair
+                .parse()
+                .map(|i| EvalML3Node::Integer(IntegerNode(i))),
+            Rule::boolean => entry_pair
+                .parse()
+                .map(|b| EvalML3Node::Boolean(BooleanNode(b))),
+            Rule::ident => entry_pair
+                .parse()
+                .map(|i| EvalML3Node::Variable(VariableNode(i))),
             Rule::atom_term => entry_pair.into_inner().parse_next(pos),
             Rule::ap_term => {
                 let mut inner = entry_pair.into_inner();
@@ -113,10 +124,10 @@ impl Parse<Rule> for AstNode {
 
                 inner.fold(init, |lhs, current| {
                     lhs.and_then(move |l| {
-                        Ok(AstNode::Application {
+                        Ok(EvalML3Node::ApplicationTerm(ApplicationNode {
                             f: Box::new(l),
                             p: Box::new(current.parse()?),
-                        })
+                        }))
                     })
                 })
             }
@@ -124,7 +135,7 @@ impl Parse<Rule> for AstNode {
                 entry_pair.into_inner(),
                 |pair| pair.parse(),
                 |lhs, op, rhs| {
-                    Ok(AstNode::Op {
+                    Ok(EvalML3Node::OpTerm(OpNode {
                         lhs: Box::new(lhs?),
                         op: match op.as_rule() {
                             Rule::op_plus => Op::Plus,
@@ -134,7 +145,7 @@ impl Parse<Rule> for AstNode {
                             _ => unreachable!(),
                         },
                         rhs: Box::new(rhs?),
-                    })
+                    }))
                 },
             ),
             Rule::if_term => {
@@ -144,11 +155,11 @@ impl Parse<Rule> for AstNode {
                 let (t_branch, pos) = inner.parse_next_with_pos(pos)?;
                 let f_branch = inner.parse_next(pos)?;
 
-                Ok(AstNode::IfTerm {
+                Ok(EvalML3Node::IfTerm(IfNode {
                     cond,
                     t_branch,
                     f_branch,
-                })
+                }))
             }
             Rule::let_in_term => {
                 let mut inner = entry_pair.into_inner();
@@ -157,11 +168,11 @@ impl Parse<Rule> for AstNode {
                 let (expr_1, pos) = inner.parse_next_with_pos(pos)?;
                 let expr_2 = inner.parse_next(pos)?;
 
-                Ok(AstNode::LetInTerm {
+                Ok(EvalML3Node::LetInTerm(LetInNode {
                     ident,
                     expr_1,
                     expr_2,
-                })
+                }))
             }
             Rule::fun_term => {
                 let mut inner = entry_pair.into_inner();
@@ -169,7 +180,7 @@ impl Parse<Rule> for AstNode {
                 let (bind, pos) = inner.parse_next_with_pos(pos)?;
                 let body = inner.parse_next(pos)?;
 
-                Ok(AstNode::Function { bind, body })
+                Ok(EvalML3Node::FunctionTerm(FunctionNode { bind, body }))
             }
             Rule::let_rec_in_term => {
                 let mut inner = entry_pair.into_inner();
@@ -179,19 +190,19 @@ impl Parse<Rule> for AstNode {
                 let (body, pos) = inner.parse_next_with_pos(pos)?;
                 let expr = inner.parse_next(pos)?;
 
-                Ok(AstNode::LetRecIn {
+                Ok(EvalML3Node::LetRecInTerm(LetRecInNode {
                     ident,
                     bind,
                     body,
                     expr,
-                })
+                }))
             }
             _ => unreachable!(),
         }
     }
 }
 
-impl Parse<Rule> for Judgement {
+impl Parse<Rule> for Judgement<NamedEnv> {
     fn parse(entry_pair: Pair<Rule>) -> StdResult<Self, Error<Rule>>
     where
         Self: Sized,

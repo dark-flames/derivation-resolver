@@ -1,4 +1,4 @@
-use crate::interface::Parse;
+use crate::derive::Parse;
 use pest::error::{Error, ErrorVariant};
 use pest::iterators::Pair;
 use pest::{Position, RuleType, Span};

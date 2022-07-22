@@ -1,4 +1,4 @@
-use crate::interface::*;
+use crate::derive::*;
 
 macro_rules! rules {
     [$(($id: ident, $name: literal)),*] => {

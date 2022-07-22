@@ -1,18 +1,24 @@
+use crate::derive::{Derivable, DerivationTree};
 use crate::error::Error;
-use crate::interface::{Derivable, DerivationTree};
-use crate::systems::eval_ml_3::rules::*;
-use crate::systems::eval_ml_3::syntax::*;
-use crate::{interface, ToToken};
+use crate::systems::common::env::NamedEnv;
+use crate::systems::common::judgement::Judgement;
+use crate::systems::common::syntax::Op;
+use crate::systems::eval_ml_3::visitor::DeriveVisitor;
+use crate::visitor::Visitor;
+use crate::{derive, ToToken};
 
-impl Derivable for Judgement {
-    fn derive(self) -> interface::Result<DerivationTree<Self>>
+impl Derivable for Judgement<NamedEnv> {
+    fn derive(self) -> derive::Result<DerivationTree<Self>>
     where
         Self: Sized,
     {
         if let Judgement::EvalTo(eval_to) = self {
-            let (tree, value) = eval(&eval_to.env, &eval_to.term)?;
+            let mut visitor = DeriveVisitor::new(eval_to.env.clone());
+            let tree = visitor.visit(&eval_to.term)?;
 
-            if value == eval_to.value {
+            let value = tree.judgement.eval_result()?;
+
+            if value.eq(&eval_to.value) {
                 Ok(tree)
             } else {
                 Err(Error::AssertionError(
@@ -53,139 +59,4 @@ impl Derivable for Judgement {
             Ok(DerivationTree::new(self, op.to_rule(), vec![]))
         }
     }
-}
-
-pub fn eval(env: &Env, node: &AstNode) -> interface::Result<(DerivationTree<Judgement>, Value)> {
-    let (reason, premises, value) = match node {
-        AstNode::Integer(i) => Ok((E_INT, vec![], Value::Integer(*i))),
-        AstNode::Boolean(b) => Ok((E_BOOL, vec![], (Value::Boolean(*b)))),
-        AstNode::Variable(v) => match env {
-            Env::Terminal => Err(Error::UnknownIdentifier),
-            Env::Segment(_, id, value) if id == v => Ok((E_VAR1, vec![], value.clone())),
-            Env::Segment(next, ..) => {
-                eval(next.as_ref(), node).map(|(tree, v)| (E_VAR2, vec![tree], v))
-            }
-        },
-        AstNode::Op { lhs, op, rhs } => {
-            let (lhs_tree, lhs_value) = eval(env, lhs.as_ref())?;
-            let (rhs_tree, rhs_value) = eval(env, rhs.as_ref())?;
-            let result = op.apply(&lhs_value, &rhs_value)?;
-
-            Ok((
-                match op {
-                    Op::Plus => E_PLUS,
-                    Op::Minus => E_MINUS,
-                    Op::Times => E_TIMES,
-                    Op::Lt => E_LT,
-                },
-                vec![
-                    lhs_tree,
-                    rhs_tree,
-                    DerivationTree::new(
-                        Judgement::from_op(*op, &lhs_value, &rhs_value, &result)?,
-                        op.to_rule(),
-                        vec![],
-                    ),
-                ],
-                result,
-            ))
-        }
-        AstNode::IfTerm {
-            cond,
-            t_branch,
-            f_branch,
-        } => {
-            let (cond_tree, cond_value) = eval(env, cond.as_ref())?;
-            let ((expr_tree, result), rule) = match cond_value {
-                Value::Boolean(true) => eval(env, t_branch.as_ref()).map(|r| (r, E_IF_T)),
-                Value::Boolean(false) => eval(env, f_branch.as_ref()).map(|r| (r, E_IF_F)),
-                _ => Err(Error::NonBooleanValue),
-            }?;
-
-            Ok((rule, vec![cond_tree, expr_tree], result))
-        }
-        AstNode::LetInTerm {
-            ident,
-            expr_1,
-            expr_2,
-        } => {
-            let (tree_1, value_1) = eval(env, expr_1.as_ref())?;
-            let new_env = Env::Segment(Box::new(env.clone()), ident.clone(), value_1);
-            let (tree_2, result) = eval(&new_env, expr_2.as_ref())?;
-
-            Ok((E_LET, vec![tree_1, tree_2], result))
-        }
-        AstNode::Function { bind, body } => Ok((
-            E_FUN,
-            vec![],
-            Value::Fun(Box::new(Function {
-                env: env.clone(),
-                bind: bind.clone(),
-                body: body.clone(),
-            })),
-        )),
-        AstNode::LetRecIn {
-            ident,
-            bind,
-            body,
-            expr,
-        } => {
-            let new_env = Env::Segment(
-                Box::new(env.clone()),
-                ident.clone(),
-                Value::RecFun(Box::new(RecursiveFunction {
-                    env: env.clone(),
-                    ident: ident.clone(),
-                    bind: bind.clone(),
-                    body: body.clone(),
-                })),
-            );
-            let (tree, result) = eval(&new_env, expr.as_ref())?;
-
-            Ok((E_LET_REC, vec![tree], result))
-        }
-        AstNode::Application { f, p } => {
-            let (f_tree, f_value) = eval(env, f.as_ref())?;
-            let (p_tree, p_value) = eval(env, p.as_ref())?;
-
-            let (new_env, body, rule) = match &f_value {
-                Value::Fun(box Function {
-                    env: f_env,
-                    bind,
-                    body,
-                }) => Ok((f_env.clone().append(bind.clone(), p_value), body, E_APP)),
-                Value::RecFun(box RecursiveFunction {
-                    env: f_env,
-                    ident,
-                    bind,
-                    body,
-                }) => Ok((
-                    f_env
-                        .clone()
-                        .append(ident.clone(), f_value.clone())
-                        .append(bind.clone(), p_value),
-                    body,
-                    E_APP_REC,
-                )),
-                _ => Err(Error::ApplyOnNonFunctionValue),
-            }?;
-
-            let (app_tree, result) = eval(&new_env, body)?;
-
-            Ok((rule, vec![f_tree, p_tree, app_tree], result))
-        }
-    }?;
-
-    Ok((
-        DerivationTree::new(
-            Judgement::EvalTo(EvalToJudgement::new(
-                env.clone(),
-                node.clone(),
-                value.clone(),
-            )),
-            reason,
-            premises,
-        ),
-        value,
-    ))
 }

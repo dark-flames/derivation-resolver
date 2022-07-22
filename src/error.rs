@@ -18,6 +18,8 @@ pub enum Error {
     AssertionError(String, String, String),
     #[error("ParseError: {0}")]
     ParseError(String),
+    #[error("NotEvalToJudgement")]
+    NotEvalToJudgement,
 }
 
 impl<R: RuleType> From<pest::error::Error<R>> for Error {

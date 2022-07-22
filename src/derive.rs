@@ -47,9 +47,9 @@ pub trait ParseNextAs<'i, R: RuleType, T: Sized> {
 }
 
 pub struct DerivationTree<J: Judgement> {
-    judgement: J,
-    reason: RuleName,
-    premises: Vec<DerivationTree<J>>,
+    pub judgement: J,
+    pub reason: RuleName,
+    pub premises: Vec<DerivationTree<J>>,
 }
 
 impl<J: Judgement> DerivationTree<J> {

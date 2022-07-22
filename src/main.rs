@@ -4,13 +4,14 @@
 extern crate pest_derive;
 extern crate pest;
 
+mod derive;
 mod error;
-mod interface;
 mod print;
 mod systems;
 mod utils;
+mod visitor;
 
-use crate::interface::System;
+use crate::derive::System;
 use crate::print::ToToken;
 use std::env::args;
 use std::fs::read_to_string;
@@ -32,7 +33,7 @@ fn main() {
 
 #[test]
 fn test() {
-    use interface::System;
+    use derive::System;
     use print::ToToken;
     use systems::eval_ml_3::EvalML3;
 
