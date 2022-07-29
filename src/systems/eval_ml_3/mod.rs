@@ -3,6 +3,7 @@ use crate::pest::Parser;
 use crate::systems::common::env::NamedEnv;
 use crate::systems::common::judgement::Judgement;
 use crate::systems::eval_ml_3::parser::ASTParser;
+use crate::systems::eval_ml_3::syntax::EvalML3Node;
 use pest::iterators::Pairs;
 use pest::Position;
 
@@ -15,7 +16,7 @@ mod visitor;
 pub struct EvalML3;
 
 impl System for EvalML3 {
-    type Judgement = Judgement<NamedEnv>;
+    type Judgement = Judgement<NamedEnv<EvalML3Node>>;
 
     fn derive(src: &str) -> crate::derive::Result<DerivationTree<Self::Judgement>> {
         let mut pairs: Pairs<parser::Rule> = ASTParser::parse(parser::Rule::entry, src)?;

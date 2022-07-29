@@ -1,54 +1,75 @@
-use crate::derive::{Derivable, DerivationTree};
+use crate::derive::{Derivable, DerivationTree, Result};
 use crate::error::Error;
+use crate::print::TokenBuffer;
 use crate::systems::common::env::NamedEnv;
-use crate::systems::common::judgement::Judgement;
-use crate::systems::common::syntax::Op;
+use crate::systems::common::judgement::{
+    Judgement, LtIsJudgement, MinusIsJudgement, PlusIsJudgement, TimesIsJudgement,
+};
+use crate::systems::common::print::PrintVisitor;
+use crate::systems::common::syntax::{AstRoot, Op};
+use crate::systems::common::value::Value;
 use crate::systems::eval_ml_3::visitor::DeriveVisitor;
-use crate::visitor::Visitor;
-use crate::{derive, ToToken};
+use crate::visitor::{Visitable, Visitor};
+use std::fmt::Result as FmtResult;
 
-impl Derivable for Judgement<NamedEnv> {
-    fn derive(self) -> derive::Result<DerivationTree<Self>>
+impl<Ast: AstRoot> Derivable for Judgement<NamedEnv<Ast>>
+where
+    DeriveVisitor<NamedEnv<Ast>>: Visitor<Ast, Result<DerivationTree<Self>>>,
+    PrintVisitor: Visitor<Ast, FmtResult> + Visitor<Value<NamedEnv<Ast>>, FmtResult>,
+{
+    fn derive(self) -> Result<DerivationTree<Self>>
     where
         Self: Sized,
     {
         if let Judgement::EvalTo(eval_to) = self {
             let mut visitor = DeriveVisitor::new(eval_to.env.clone());
-            let tree = visitor.visit(&eval_to.term)?;
+            let tree = eval_to.term.apply_visitor(&mut visitor)?;
 
             let value = tree.judgement.eval_result()?;
 
             if value.eq(&eval_to.value) {
                 Ok(tree)
             } else {
+                let mut term_visitor = PrintVisitor::new(1);
+                eval_to.term.apply_visitor(&mut term_visitor)?;
+                let term_buffer: Result<TokenBuffer> = term_visitor.into();
+
+                let mut value_visitor = PrintVisitor::new(0);
+                value.apply_visitor(&mut value_visitor)?;
+                let value_buffer: Result<TokenBuffer> = value_visitor.into();
+
+                let mut result_visitor = PrintVisitor::new(0);
+                eval_to.value.apply_visitor(&mut result_visitor)?;
+                let result_buffer: Result<TokenBuffer> = result_visitor.into();
+
                 Err(Error::AssertionError(
-                    eval_to.term.token_buffer(1)?.format(2),
-                    value.token_buffer(0)?.format_inline(),
-                    eval_to.value.token_buffer(0)?.format_inline(),
+                    term_buffer?.format(2),
+                    value_buffer?.format_inline(),
+                    result_buffer?.format_inline(),
                 ))
             }
         } else {
             let op = match self {
-                Judgement::PlusIs(a, b, c) if a + b == c => Ok(Op::Plus),
-                Judgement::PlusIs(a, b, c) => Err(Error::AssertionError(
+                Judgement::PlusIs(PlusIsJudgement(a, b, c)) if a + b == c => Ok(Op::Plus),
+                Judgement::PlusIs(PlusIsJudgement(a, b, c)) => Err(Error::AssertionError(
                     format!("{} plus {}", a, b),
                     c.to_string(),
                     (a + b).to_string(),
                 )),
-                Judgement::MinusIs(a, b, c) if a - b == c => Ok(Op::Minus),
-                Judgement::MinusIs(a, b, c) => Err(Error::AssertionError(
+                Judgement::MinusIs(MinusIsJudgement(a, b, c)) if a - b == c => Ok(Op::Minus),
+                Judgement::MinusIs(MinusIsJudgement(a, b, c)) => Err(Error::AssertionError(
                     format!("{} minus {}", a, b),
                     c.to_string(),
                     (a - b).to_string(),
                 )),
-                Judgement::TimesIs(a, b, c) if a * b == c => Ok(Op::Times),
-                Judgement::TimesIs(a, b, c) => Err(Error::AssertionError(
+                Judgement::TimesIs(TimesIsJudgement(a, b, c)) if a * b == c => Ok(Op::Times),
+                Judgement::TimesIs(TimesIsJudgement(a, b, c)) => Err(Error::AssertionError(
                     format!("{} plus {}", a, b),
                     c.to_string(),
                     (a + b).to_string(),
                 )),
-                Judgement::LtIs(a, b, c) if (a < b) == c => Ok(Op::Lt),
-                Judgement::LtIs(a, b, c) => Err(Error::AssertionError(
+                Judgement::LtIs(LtIsJudgement(a, b, c)) if (a < b) == c => Ok(Op::Lt),
+                Judgement::LtIs(LtIsJudgement(a, b, c)) => Err(Error::AssertionError(
                     format!("{} plus {}", a, b),
                     c.to_string(),
                     (a < b).to_string(),

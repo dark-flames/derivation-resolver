@@ -1,21 +1,58 @@
-use crate::print::TokenBuffer;
+use crate::derive::Result;
+use crate::systems::common::env::Env;
 use crate::systems::common::value::Value;
 use crate::systems::eval_ml_3::rules::{B_LT, B_MINUS, B_PLUS, B_TIMES};
-use crate::visitor::AstNode;
-use crate::{derive, ToToken};
+use crate::visitor::Visitable;
 use std::cmp::Ordering;
-use std::fmt::{Result as FmtResult, Write};
 
-pub trait AsOpNums: AstNode {
+pub trait AsOpNums: Visitable {
     fn need_paren(&self, _op: Op) -> bool {
         false
     }
 }
 
-pub trait AsParam: AstNode {
+pub trait AsParam: Visitable {
     fn need_paren(&self) -> bool {
         false
     }
+}
+
+pub trait AstRoot: Visitable {
+    fn integer(value: i64) -> Result<Self>
+    where
+        Self: Sized;
+
+    fn boolean(value: bool) -> Result<Self>
+    where
+        Self: Sized;
+
+    fn variable(name: String) -> Result<Self>
+    where
+        Self: Sized;
+
+    fn op_term(node: OpNode<Self>) -> Result<Self>
+    where
+        Self: Sized + AsOpNums;
+
+    fn if_term(node: IfNode<Self>) -> Result<Self>
+    where
+        Self: Sized;
+
+    fn let_in_term(node: LetInNode<Self>) -> Result<Self>
+    where
+        Self: Sized;
+
+    fn function_term(node: FunctionNode<Self>) -> Result<Self>
+    where
+        Self: Sized;
+
+    fn application_term(node: ApplicationNode<Self>) -> Result<Self>
+    where
+        Self: Sized + AsParam;
+
+    fn let_rec_in_term(node: LetRecInNode<Self>) -> Result<Self>
+    where
+        Self: Sized;
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -36,198 +73,116 @@ pub enum Op {
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
-pub struct OpNode<Node: AstNode + AsOpNums> {
+pub struct OpNode<Node: AstRoot + AsOpNums> {
     pub lhs: Box<Node>,
     pub op: Op,
     pub rhs: Box<Node>,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
-pub struct IfNode<Node: AstNode> {
+pub struct IfNode<Node: AstRoot> {
     pub cond: Box<Node>,
     pub t_branch: Box<Node>,
     pub f_branch: Box<Node>,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
-pub struct LetInNode<Node: AstNode> {
+pub struct LetInNode<Node: AstRoot> {
     pub ident: Ident,
     pub expr_1: Box<Node>,
     pub expr_2: Box<Node>,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
-pub struct FunctionNode<Node: AstNode> {
+pub struct FunctionNode<Node: AstRoot> {
     pub bind: Ident,
     pub body: Box<Node>,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
-pub struct ApplicationNode<Node: AstNode + AsParam> {
+pub struct ApplicationNode<Node: AstRoot + AsParam> {
     pub f: Box<Node>,
     pub p: Box<Node>,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
-pub struct LetRecInNode<Node: AstNode> {
+pub struct LetRecInNode<Node: AstRoot> {
     pub ident: Ident,
     pub bind: Ident,
     pub body: Box<Node>,
     pub expr: Box<Node>,
 }
 
-impl ToToken for IntegerNode {
-    fn to_token(&self, buffer: &mut TokenBuffer) -> FmtResult {
-        write!(buffer, "{}", self.0)
-    }
-}
-
-impl AstNode for IntegerNode {}
+impl Visitable for IntegerNode {}
 impl AsOpNums for IntegerNode {}
 impl AsParam for IntegerNode {}
 
-impl ToToken for BooleanNode {
-    fn to_token(&self, buffer: &mut TokenBuffer) -> FmtResult {
-        write!(buffer, "{}", if self.0 { true } else { false })
-    }
-}
-
-impl AstNode for BooleanNode {}
+impl Visitable for BooleanNode {}
 impl AsOpNums for BooleanNode {}
 impl AsParam for BooleanNode {}
 
-impl ToToken for VariableNode {
-    fn to_token(&self, buffer: &mut TokenBuffer) -> FmtResult {
-        write!(buffer, "{}", self.0)
-    }
-}
-
-impl AstNode for VariableNode {}
+impl Visitable for VariableNode {}
 impl AsOpNums for VariableNode {}
 impl AsParam for VariableNode {}
 
-impl<Node: AstNode + AsOpNums> ToToken for OpNode<Node> {
-    fn to_token(&self, buffer: &mut TokenBuffer) -> FmtResult {
-        if self.lhs.need_paren(self.op) {
-            buffer.parenthesized(&self.lhs)?;
-        } else {
-            self.lhs.to_token(buffer)?;
-        }
+impl<Node: AstRoot + AsOpNums> Visitable for OpNode<Node> {}
 
-        self.op.to_token(buffer)?;
-        if self.rhs.need_paren(self.op) {
-            buffer.parenthesized(&self.rhs)
-        } else {
-            self.rhs.to_token(buffer)
-        }
-    }
-}
-
-impl<Node: AstNode + AsOpNums> AstNode for OpNode<Node> {}
-
-impl<Node: AstNode + AsOpNums> AsOpNums for OpNode<Node> {
+impl<Node: AstRoot + AsOpNums> AsOpNums for OpNode<Node> {
     fn need_paren(&self, op: Op) -> bool {
         self.op < op
     }
 }
 
-impl<Node: AstNode + AsOpNums> AsParam for OpNode<Node> {
+impl<Node: AstRoot + AsOpNums> AsParam for OpNode<Node> {
     fn need_paren(&self) -> bool {
         true
     }
 }
 
-impl<Node: AstNode> ToToken for IfNode<Node> {
-    fn to_token(&self, buffer: &mut TokenBuffer) -> FmtResult {
-        buffer.write_str("if")?;
-        self.cond.to_token(buffer)?;
-        buffer.write_str("then")?;
-        self.t_branch.to_token(buffer)?;
-        buffer.write_str("else")?;
-        self.f_branch.to_token(buffer)
-    }
-}
+impl<Node: AstRoot> Visitable for IfNode<Node> {}
 
-impl<Node: AstNode> AstNode for IfNode<Node> {}
+impl<Node: AstRoot> AsOpNums for IfNode<Node> {}
 
-impl<Node: AstNode> AsOpNums for IfNode<Node> {}
+impl<Node: AstRoot> AsParam for IfNode<Node> {}
 
-impl<Node: AstNode> AsParam for IfNode<Node> {}
+impl<Node: AstRoot> AsOpNums for LetInNode<Node> {}
 
-impl<Node: AstNode> AsOpNums for LetInNode<Node> {}
+impl<Node: AstRoot> AsParam for LetInNode<Node> {}
 
-impl<Node: AstNode> AsParam for LetInNode<Node> {}
+impl<Node: AstRoot> Visitable for LetInNode<Node> {}
 
-impl<Node: AstNode> ToToken for LetInNode<Node> {
-    fn to_token(&self, buffer: &mut TokenBuffer) -> FmtResult {
-        write!(buffer, "let {} =", self.ident)?;
-        self.expr_1.to_token(buffer)?;
-        buffer.write_str("in")?;
-        self.expr_2.to_token(buffer)
-    }
-}
+impl<Node: AstRoot> Visitable for LetRecInNode<Node> {}
 
-impl<Node: AstNode> AstNode for LetInNode<Node> {}
+impl<Node: AstRoot> AsOpNums for LetRecInNode<Node> {}
 
-impl<Node: AstNode> ToToken for LetRecInNode<Node> {
-    fn to_token(&self, buffer: &mut TokenBuffer) -> FmtResult {
-        write!(buffer, "let rec {} = fun {} ->", self.ident, self.bind)?;
-        buffer.parenthesized(&self.body)?;
-        buffer.write_str("in")?;
-        buffer.parenthesized(&self.expr)
-    }
-}
+impl<Node: AstRoot> AsParam for LetRecInNode<Node> {}
 
-impl<Node: AstNode> AstNode for LetRecInNode<Node> {}
+impl<Node: AstRoot> Visitable for FunctionNode<Node> {}
 
-impl<Node: AstNode> AsOpNums for LetRecInNode<Node> {}
+impl<Node: AstRoot> AsOpNums for FunctionNode<Node> {}
 
-impl<Node: AstNode> AsParam for LetRecInNode<Node> {}
-
-impl<Node: AstNode> ToToken for FunctionNode<Node> {
-    fn to_token(&self, buffer: &mut TokenBuffer) -> FmtResult {
-        write!(buffer, "fun {} ->", self.bind)?;
-        self.body.to_token(buffer)
-    }
-}
-
-impl<Node: AstNode> AstNode for FunctionNode<Node> {}
-
-impl<Node: AstNode> AsOpNums for FunctionNode<Node> {}
-
-impl<Node: AstNode> AsParam for FunctionNode<Node> {
+impl<Node: AstRoot> AsParam for FunctionNode<Node> {
     fn need_paren(&self) -> bool {
         true
     }
 }
 
-impl<Node: AstNode + AsParam> ToToken for ApplicationNode<Node> {
-    fn to_token(&self, buffer: &mut TokenBuffer) -> FmtResult {
-        self.f.to_token(buffer)?;
-        if self.p.need_paren() {
-            buffer.parenthesized(&self.p)
-        } else {
-            self.p.to_token(buffer)
-        }
-    }
-}
-
-impl<Node: AstNode + AsParam> AsOpNums for ApplicationNode<Node> {
+impl<Node: AstRoot + AsParam> AsOpNums for ApplicationNode<Node> {
     fn need_paren(&self, _op: Op) -> bool {
         true
     }
 }
 
-impl<Node: AstNode + AsParam> AsParam for ApplicationNode<Node> {
+impl<Node: AstRoot + AsParam> AsParam for ApplicationNode<Node> {
     fn need_paren(&self) -> bool {
         true
     }
 }
 
-impl<Node: AstNode + AsParam> AstNode for ApplicationNode<Node> {}
+impl<Node: AstRoot + AsParam> Visitable for ApplicationNode<Node> {}
 
 impl Op {
-    pub fn apply(&self, lhs: &Value, rhs: &Value) -> derive::Result<Value> {
+    pub fn apply<E: Env>(&self, lhs: &Value<E>, rhs: &Value<E>) -> Result<Value<E>> {
         Ok(match self {
             Op::Plus => Value::Integer(lhs.try_get_int()? + rhs.try_get_int()?),
             Op::Minus => Value::Integer(lhs.try_get_int()? - rhs.try_get_int()?),
@@ -263,15 +218,6 @@ impl PartialOrd for Op {
     }
 }
 
-impl ToToken for Op {
-    fn to_token(&self, buffer: &mut TokenBuffer) -> FmtResult {
-        buffer.write_char(match self {
-            Op::Plus => '+',
-            Op::Minus => '-',
-            Op::Times => '*',
-            Op::Lt => '<',
-        })
-    }
-}
+impl Visitable for Op {}
 
 pub type Ident = String;

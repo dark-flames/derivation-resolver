@@ -1,11 +1,10 @@
 use crate::error::Error;
-use crate::print::{ToToken, TokenBuffer};
 use crate::utils::error_pos;
+use crate::visitor::{Visitable, Visitor};
 use pest::error::Error as PestError;
 use pest::iterators::{Pair, Pairs};
 use pest::{Position, RuleType};
 use std::any::type_name;
-use std::fmt::{Result as fmtResult, Write};
 use std::result::Result as StdResult;
 
 pub type Result<T> = StdResult<T, Error>;
@@ -22,7 +21,7 @@ pub trait Derivable: Judgement {
         Self: Sized;
 }
 
-pub trait Judgement: ToToken {}
+pub trait Judgement: Visitable {}
 
 pub trait Parse<R: RuleType> {
     fn parse(entry_pair: Pair<R>) -> StdResult<Self, PestError<R>>
@@ -46,6 +45,7 @@ pub trait ParseNextAs<'i, R: RuleType, T: Sized> {
     fn parse_next_with_pos(&mut self, pos: Position) -> StdResult<(T, Position<'i>), PestError<R>>;
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DerivationTree<J: Judgement> {
     pub judgement: J,
     pub reason: RuleName,
@@ -58,26 +58,6 @@ impl<J: Judgement> DerivationTree<J> {
             judgement,
             reason,
             premises,
-        }
-    }
-}
-
-impl<J: Judgement> ToToken for DerivationTree<J> {
-    fn to_token(&self, buffer: &mut TokenBuffer) -> fmtResult {
-        self.judgement.to_token(buffer)?;
-        write!(buffer, "by {}", self.reason)?;
-        if self.premises.is_empty() {
-            write!(buffer, "{{}}")
-        } else {
-            let mut block = buffer.sub_buffer();
-            let last_index = self.premises.len() - 1;
-            for (index, premise) in self.premises.iter().enumerate() {
-                premise.to_token(&mut block)?;
-                if index != last_index {
-                    block.commit_line(true)?;
-                }
-            }
-            buffer.commit_block(block.freeze()?)
         }
     }
 }
@@ -129,5 +109,14 @@ impl<'i, R: RuleType, T: Parse<R>> ParseNextAs<'i, R, T> for Pairs<'i, R> {
                 )
             })
             .and_then(ParseAs::parse_with_pos)
+    }
+}
+
+impl<J: Judgement> Visitable for DerivationTree<J> {
+    fn apply_visitor<R, T: Visitor<Self, R>>(&self, visitor: &mut T) -> R
+    where
+        Self: Sized,
+    {
+        visitor.visit(self)
     }
 }

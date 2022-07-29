@@ -1,6 +1,8 @@
 use crate::derive::{Parse, ParseAs, ParseNextAs};
 use crate::systems::common::env::NamedEnv;
-use crate::systems::common::judgement::{EvalToJudgement, Judgement};
+use crate::systems::common::judgement::{
+    EvalToJudgement, Judgement, LtIsJudgement, MinusIsJudgement, PlusIsJudgement, TimesIsJudgement,
+};
 use crate::systems::common::syntax::{
     ApplicationNode, BooleanNode, FunctionNode, Ident, IfNode, IntegerNode, LetInNode,
     LetRecInNode, Op, OpNode, VariableNode,
@@ -34,7 +36,7 @@ lazy_static! {
     };
 }
 
-impl Parse<Rule> for NamedEnv {
+impl Parse<Rule> for NamedEnv<EvalML3Node> {
     fn parse(entry_pair: Pair<Rule>) -> Result<Self>
     where
         Self: Sized,
@@ -49,7 +51,7 @@ impl Parse<Rule> for NamedEnv {
                     _ => Err(error_span(seg_span, "expect an ident here".to_string())),
                 }?;
 
-                let value: Value = inner_rules.parse_next(pos)?;
+                let value: Value<NamedEnv<EvalML3Node>> = inner_rules.parse_next(pos)?;
 
                 Ok((ident, value))
             })
@@ -62,7 +64,7 @@ impl Parse<Rule> for NamedEnv {
     }
 }
 
-impl Parse<Rule> for Value {
+impl Parse<Rule> for Value<NamedEnv<EvalML3Node>> {
     fn parse(entry_pair: Pair<Rule>) -> Result<Self>
     where
         Self: Sized,
@@ -202,7 +204,7 @@ impl Parse<Rule> for EvalML3Node {
     }
 }
 
-impl Parse<Rule> for Judgement<NamedEnv> {
+impl Parse<Rule> for Judgement<NamedEnv<EvalML3Node>> {
     fn parse(entry_pair: Pair<Rule>) -> StdResult<Self, Error<Rule>>
     where
         Self: Sized,
@@ -226,9 +228,9 @@ impl Parse<Rule> for Judgement<NamedEnv> {
 
                 if inner.next().is_none() {
                     Ok(match entry_rule {
-                        Rule::plus_is_judgement => Judgement::PlusIs(a, b, c),
-                        Rule::minus_is_judgement => Judgement::MinusIs(a, b, c),
-                        Rule::times_is_judgement => Judgement::TimesIs(a, b, c),
+                        Rule::plus_is_judgement => Judgement::PlusIs(PlusIsJudgement(a, b, c)),
+                        Rule::minus_is_judgement => Judgement::MinusIs(MinusIsJudgement(a, b, c)),
+                        Rule::times_is_judgement => Judgement::TimesIs(TimesIsJudgement(a, b, c)),
                         _ => unreachable!(),
                     })
                 } else {
@@ -247,7 +249,7 @@ impl Parse<Rule> for Judgement<NamedEnv> {
                 let c = inner.parse_next(pos)?;
 
                 if inner.next().is_none() {
-                    Ok(Judgement::LtIs(a, b, c))
+                    Ok(Judgement::LtIs(LtIsJudgement(a, b, c)))
                 } else {
                     Err(error_span(
                         span,

@@ -1,16 +1,14 @@
+use crate::derive::Result;
 use crate::error::Error;
-use crate::print::TokenBuffer;
-use crate::systems::common::env::{Env, NamedEnv};
+use crate::systems::common::env::Env;
 use crate::systems::common::syntax::Ident;
-use crate::systems::eval_ml_3::syntax::BoxedNode;
-use crate::{derive, ToToken};
-use std::fmt::{Result as FmtResult, Write};
+use crate::visitor::Visitable;
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Function<E: Env> {
     pub env: E,
     pub bind: Ident,
-    pub body: BoxedNode,
+    pub body: Box<E::Ast>,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -18,43 +16,19 @@ pub struct RecursiveFunction<E: Env> {
     pub env: E,
     pub ident: Ident,
     pub bind: Ident,
-    pub body: BoxedNode,
-}
-
-impl<E: Env> ToToken for Function<E> {
-    fn to_token(&self, buffer: &mut TokenBuffer) -> FmtResult {
-        buffer.parenthesized(&self.env)?;
-        buffer.write_char('[')?;
-        write!(buffer, "fun {} ->", self.bind)?;
-        self.body.to_token(buffer)?;
-        buffer.write_char(']')?;
-
-        Ok(())
-    }
-}
-
-impl<E: Env> ToToken for RecursiveFunction<E> {
-    fn to_token(&self, buffer: &mut TokenBuffer) -> FmtResult {
-        buffer.parenthesized(&self.env)?;
-        buffer.write_char('[')?;
-        write!(buffer, "rec {} = fun {} ->", self.ident, self.bind)?;
-        self.body.to_token(buffer)?;
-        buffer.write_char(']')?;
-
-        Ok(())
-    }
+    pub body: Box<E::Ast>,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
-pub enum Value {
+pub enum Value<E: Env> {
     Integer(i64),
     Boolean(bool),
-    Fun(Box<Function<NamedEnv>>),
-    RecFun(Box<RecursiveFunction<NamedEnv>>),
+    Fun(Box<Function<E>>),
+    RecFun(Box<RecursiveFunction<E>>),
 }
 
-impl Value {
-    pub fn try_get_int(&self) -> derive::Result<i64> {
+impl<E: Env> Value<E> {
+    pub fn try_get_int(&self) -> Result<i64> {
         if let Value::Integer(r) = self {
             Ok(*r)
         } else {
@@ -62,7 +36,7 @@ impl Value {
         }
     }
 
-    pub fn try_get_bool(&self) -> derive::Result<bool> {
+    pub fn try_get_bool(&self) -> Result<bool> {
         if let Value::Boolean(r) = self {
             Ok(*r)
         } else {
@@ -71,13 +45,8 @@ impl Value {
     }
 }
 
-impl ToToken for Value {
-    fn to_token(&self, buffer: &mut TokenBuffer) -> FmtResult {
-        match self {
-            Value::Integer(i) => write!(buffer, "{}", i),
-            Value::Boolean(b) => write!(buffer, "{}", b),
-            Value::Fun(f) => f.to_token(buffer),
-            Value::RecFun(rf) => rf.to_token(buffer),
-        }
-    }
-}
+impl<E: Env> Visitable for Value<E> {}
+
+impl<E: Env> Visitable for Function<E> {}
+
+impl<E: Env> Visitable for RecursiveFunction<E> {}
