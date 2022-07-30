@@ -1,21 +1,20 @@
-use crate::derive::Result;
-use crate::derive::{Derivable, DerivationTree};
+use crate::derive::{Derivable, DerivationTree, Result};
 use crate::error::Error;
-use crate::systems::common::env::{Env, NamedEnv};
+use crate::systems::common::env::Env;
 use crate::systems::common::judgement::{EvalToJudgement, Judgement};
+use crate::systems::common::rules::*;
 use crate::systems::common::syntax::{
     ApplicationNode, AsOpNums, AsParam, AstRoot, BooleanNode, FunctionNode, IfNode, IntegerNode,
-    LetInNode, LetRecInNode, Op, OpNode, VariableNode,
+    LetInNode, LetRecInNode, ListConcatNode, NilListNode, Op, OpNode,
 };
-use crate::systems::common::value::{Function, RecursiveFunction, Value};
-use crate::systems::eval_ml_3::rules::*;
-use crate::systems::eval_ml_3::syntax::EvalML3Node;
-use crate::visitor::{Visitable, Visitor};
+use crate::systems::common::value::{ConcatList, Function, RecursiveFunction, Value};
+use crate::visitor::Visitor;
+use crate::Visitable;
 
-type DerivationTreeOf<E> = DerivationTree<Judgement<E>>;
+pub type DerivationTreeOf<E> = DerivationTree<Judgement<E>>;
 
 pub struct DeriveVisitor<E: Env> {
-    env: E,
+    pub(crate) env: E,
 }
 
 impl<E: Env> DeriveVisitor<E> {
@@ -49,42 +48,6 @@ impl<E: Env> Visitor<BooleanNode, Result<DerivationTreeOf<E>>> for DeriveVisitor
             E_BOOL,
             vec![],
         ))
-    }
-}
-
-impl<E: Env> Visitor<VariableNode, Result<DerivationTreeOf<E>>> for DeriveVisitor<E> {
-    fn visit(&mut self, node: &VariableNode) -> Result<DerivationTreeOf<E>> {
-        let id = &node.0;
-        self.env
-            .lookup_named(
-                |cur_id, value, env| {
-                    (cur_id.is_some() && id == cur_id.unwrap()).then(|| {
-                        Ok(DerivationTree::new(
-                            Judgement::EvalTo(EvalToJudgement::new(
-                                env.clone(),
-                                E::Ast::variable(node.0.clone())?,
-                                value.clone(),
-                            )),
-                            E_VAR1,
-                            vec![],
-                        ))
-                    })
-                },
-                |t, env| {
-                    t.and_then(|t| {
-                        Ok(DerivationTree::new(
-                            Judgement::EvalTo(EvalToJudgement::new(
-                                env.clone(),
-                                E::Ast::variable(node.0.clone())?,
-                                t.judgement.eval_result().unwrap().clone(),
-                            )),
-                            E_VAR2,
-                            vec![t],
-                        ))
-                    })
-                },
-            )
-            .ok_or(Error::UnknownIdentifier)?
     }
 }
 
@@ -276,23 +239,41 @@ where
     }
 }
 
-impl Visitor<EvalML3Node, Result<DerivationTree<Judgement<NamedEnv<EvalML3Node>>>>>
-    for DeriveVisitor<NamedEnv<EvalML3Node>>
+impl<E: Env> Visitor<NilListNode, Result<DerivationTreeOf<E>>> for DeriveVisitor<E> {
+    fn visit(&mut self, _node: &NilListNode) -> Result<DerivationTreeOf<E>> {
+        Ok(DerivationTree::new(
+            Judgement::EvalTo(EvalToJudgement::new(
+                self.env.clone(),
+                E::Ast::nil_list()?,
+                Value::NilList,
+            )),
+            E_NIL,
+            vec![],
+        ))
+    }
+}
+
+impl<E: Env> Visitor<ListConcatNode<E::Ast>, Result<DerivationTreeOf<E>>> for DeriveVisitor<E>
+where
+    Self: Visitor<E::Ast, Result<DerivationTreeOf<E>>>,
 {
-    fn visit(
-        &mut self,
-        node: &EvalML3Node,
-    ) -> Result<DerivationTree<Judgement<NamedEnv<EvalML3Node>>>> {
-        match node {
-            EvalML3Node::Integer(n) => self.visit(n),
-            EvalML3Node::Boolean(n) => self.visit(n),
-            EvalML3Node::Variable(n) => self.visit(n),
-            EvalML3Node::OpTerm(n) => self.visit(n),
-            EvalML3Node::IfTerm(n) => self.visit(n),
-            EvalML3Node::LetInTerm(n) => self.visit(n),
-            EvalML3Node::FunctionTerm(n) => self.visit(n),
-            EvalML3Node::ApplicationTerm(n) => self.visit(n),
-            EvalML3Node::LetRecInTerm(n) => self.visit(n),
-        }
+    fn visit(&mut self, node: &ListConcatNode<E::Ast>) -> Result<DerivationTreeOf<E>> {
+        let left_tree = node.lhs.apply_visitor(self)?;
+        let left_result = left_tree.judgement.eval_result()?;
+        let right_tree = node.rhs.apply_visitor(self)?;
+        let right_result = right_tree.judgement.eval_result()?;
+
+        Ok(DerivationTree::new(
+            Judgement::EvalTo(EvalToJudgement::new(
+                self.env.clone(),
+                E::Ast::list_concat(node.clone())?,
+                Value::ConcatList(ConcatList {
+                    lhs: Box::new(left_result.clone()),
+                    rhs: Box::new(right_result.clone()),
+                }),
+            )),
+            E_CONS,
+            vec![left_tree, right_tree],
+        ))
     }
 }

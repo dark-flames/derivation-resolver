@@ -5,10 +5,10 @@ use crate::systems::common::judgement::{
     EvalToJudgement, Judgement, LtIsJudgement, MinusIsJudgement, PlusIsJudgement, TimesIsJudgement,
 };
 use crate::systems::common::syntax::{
-    ApplicationNode, AsOpNums, AsParam, AstRoot, BooleanNode, FunctionNode, IfNode, IntegerNode,
-    LetInNode, LetRecInNode, Op, OpNode, VariableNode,
+    ApplicationNode, AsListSeg, AsOpNums, AsParam, AstRoot, BooleanNode, FunctionNode, IfNode,
+    IntegerNode, LetInNode, LetRecInNode, ListConcatNode, NilListNode, Op, OpNode, VariableNode,
 };
-use crate::systems::common::value::{Function, RecursiveFunction, Value};
+use crate::systems::common::value::{ConcatList, Function, RecursiveFunction, Value};
 use crate::visitor::{Visitable, Visitor};
 use std::fmt::{Result as FmtResult, Write};
 
@@ -83,11 +83,11 @@ impl Visitor<VariableNode, FmtResult> for PrintVisitor {
 
 impl Visitor<Op, FmtResult> for PrintVisitor {
     fn visit(&mut self, node: &Op) -> FmtResult {
-        self.buffer.write_char(match node {
-            Op::Plus => '+',
-            Op::Minus => '-',
-            Op::Times => '*',
-            Op::Lt => '<',
+        self.buffer.write_str(match node {
+            Op::Plus => "+",
+            Op::Minus => "-",
+            Op::Times => "*",
+            Op::Lt => "<",
         })
     }
 }
@@ -97,14 +97,14 @@ where
     Self: Visitor<Ast, FmtResult>,
 {
     fn visit(&mut self, node: &OpNode<Ast>) -> FmtResult {
-        if node.lhs.need_paren(node.op) {
+        if node.lhs.need_paren(node.op, true) {
             self.parenthesized_visit(node.lhs.as_ref())?;
         } else {
             node.lhs.apply_visitor(self)?;
         }
 
         node.op.apply_visitor(self)?;
-        if node.rhs.need_paren(node.op) {
+        if node.rhs.need_paren(node.op, false) {
             self.parenthesized_visit(node.rhs.as_ref())
         } else {
             node.rhs.apply_visitor(self)
@@ -163,7 +163,9 @@ where
         self.buffer.write_str("fun")?;
         self.buffer.write_str(node.bind.as_str())?;
         self.buffer.write_str("->")?;
-        node.body.apply_visitor(self)
+        node.body.apply_visitor(self)?;
+        self.buffer.write_str("in")?;
+        node.expr.apply_visitor(self)
     }
 }
 
@@ -177,6 +179,32 @@ where
             self.parenthesized_visit(node.p.as_ref())
         } else {
             node.p.apply_visitor(self)
+        }
+    }
+}
+
+impl Visitor<NilListNode, FmtResult> for PrintVisitor {
+    fn visit(&mut self, _node: &NilListNode) -> FmtResult {
+        self.buffer.write_str("[]")
+    }
+}
+
+impl<Ast: AstRoot + AsListSeg> Visitor<ListConcatNode<Ast>, FmtResult> for PrintVisitor
+where
+    Self: Visitor<Ast, FmtResult>,
+{
+    fn visit(&mut self, node: &ListConcatNode<Ast>) -> FmtResult {
+        if node.lhs.need_paren(true) {
+            self.parenthesized_visit(node.lhs.as_ref())?;
+        } else {
+            node.lhs.apply_visitor(self)?;
+        }
+
+        self.buffer.write_str("::")?;
+        if node.rhs.need_paren(false) {
+            self.parenthesized_visit(node.rhs.as_ref())
+        } else {
+            node.rhs.apply_visitor(self)
         }
     }
 }
@@ -245,6 +273,8 @@ where
             Value::Boolean(b) => write!(self.buffer, "{}", b),
             Value::Fun(f) => f.apply_visitor(self),
             Value::RecFun(rf) => rf.apply_visitor(self),
+            Value::NilList => write!(self.buffer, "[]"),
+            Value::ConcatList(l) => l.apply_visitor(self),
         }
     }
 }
@@ -279,6 +309,24 @@ where
         self.buffer.write_str("->")?;
         node.body.apply_visitor(self)?;
         self.buffer.write_char(']')
+    }
+}
+
+impl<E: Env> Visitor<ConcatList<E>, FmtResult> for PrintVisitor
+where
+    PrintVisitor: Visitor<Value<E>, FmtResult>,
+{
+    fn visit(&mut self, node: &ConcatList<E>) -> FmtResult {
+        if matches!(
+            node.lhs.as_ref(),
+            Value::ConcatList(_) | Value::Fun(_) | Value::RecFun(_)
+        ) {
+            self.parenthesized_visit(node.lhs.as_ref())?;
+        } else {
+            node.lhs.apply_visitor(self)?;
+        }
+        self.buffer.write_str("::")?;
+        node.rhs.apply_visitor(self)
     }
 }
 

@@ -1,0 +1,136 @@
+entry = _{SOI ~ judgement ~ EOI}
+
+judgement = _{
+    eval_to_judgement |
+    plus_is_judgement |
+    minus_is_judgement |
+    times_is_judgement |
+    lt_is_judgement
+}
+
+eval_to_judgement = {
+    env ~ v_dash ~ term ~ keyword_eval_to ~ value
+}
+
+plus_is_judgement = {
+    integer ~ keyword_plus ~ integer ~ keyword_is ~ integer
+}
+
+minus_is_judgement = {
+    integer ~ keyword_minus ~ integer ~ keyword_is ~ integer
+}
+
+times_is_judgement = {
+    integer ~ keyword_times ~ integer ~ keyword_is ~ integer
+}
+
+lt_is_judgement = {
+    integer ~ keyword_less_than ~ integer ~ keyword_is ~ boolean
+}
+
+env = {
+    env_segment? ~ (comma ~ env_segment)*
+}
+
+env_segment = {
+    ident ~ assign ~ value
+}
+
+nil_list_term = {l_bracket ~ r_bracket}
+fun_term = { keyword_fun ~ ident ~ arrow ~ term }
+atom_term = { integer | boolean | ident | nil_list_term | l_paren ~ term ~ r_paren }
+ap_term = { non_ap_term ~ (non_ap_term)* }
+op_term = { ap_term ~(op ~ ap_term) * }
+if_term = { keyword_if ~ term ~ keyword_then ~ term ~ keyword_else ~ term }
+let_in_term = { keyword_let ~ ident ~ assign ~ term ~ keyword_in ~ term }
+let_rec_in_term = { keyword_let ~ keyword_rec ~ ident ~ assign ~ keyword_fun ~ ident ~ arrow ~ term ~ keyword_in ~ term }
+list_match_term = {keyword_match ~ term ~ keyword_with ~ l_bracket ~ r_bracket ~ arrow ~ term ~ bar ~ ident ~ op_concat ~ ident ~ arrow ~ term}
+
+non_ap_term = _{
+    atom_term |
+    fun_term
+}
+
+term = _{
+    op_term |
+    ap_term |
+    if_term |
+    let_rec_in_term |
+    let_in_term |
+    list_match_term
+}
+
+
+value = {
+    value_cons_list |
+    integer |
+    boolean |
+    value_fun |
+    value_rec_fun |
+    value_nil_list
+
+}
+
+non_cons_value =  {
+    integer |
+    boolean |
+    value_fun |
+    value_rec_fun |
+    value_nil_list
+}
+value_fun = {
+   l_paren ~ env ~ r_paren ~ l_bracket ~ keyword_fun ~ ident ~ arrow ~ term ~ r_bracket
+}
+
+value_rec_fun = {
+    l_paren ~ env ~ r_paren ~ l_bracket ~ keyword_rec ~ ident ~ assign ~ keyword_fun ~ ident ~ arrow ~ term ~ r_bracket
+}
+
+value_nil_list = { l_bracket ~ r_bracket }
+value_cons_list = { non_cons_value ~ (op_concat ~ non_cons_value)+ }
+
+digit = _{ '0'..'9' }
+unsigned_int = @{ digit ~ (digit)* }
+integer = @{ "-"? ~ unsigned_int }
+ident = @{ !(keyword) ~ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
+boolean = @{ keyword_true | keyword_false }
+
+// Keyword
+keyword = { keyword_fun | keyword_rec | keyword_if | keyword_then | keyword_else | keyword_let | keyword_in | keyword_eval_to | keyword_is | keyword_plus | keyword_minus | keyword_times | keyword_match | keyword_with | keyword_true | keyword_false }
+keyword_fun = _{"fun"}
+keyword_rec = _{"rec"}
+keyword_if = _{"if"}
+keyword_then = _{"then"}
+keyword_else = _{"else"}
+keyword_let = _{"let"}
+keyword_in = _{"in"}
+keyword_eval_to = _{"evalto"}
+keyword_is = _{"is"}
+keyword_plus = _{"plus"}
+keyword_minus = _{"minus"}
+keyword_times = _{"times"}
+keyword_less_than = _{"less" ~ "than"}
+keyword_match = _{"match"}
+keyword_with = _{"with"}
+keyword_true = @{"true"}
+keyword_false = @{"false"}
+
+/// Red
+arrow = _{"->"}
+assign = _{"="}
+v_dash = _{"|-"}
+l_paren = _{"("}
+r_paren = _{")"}
+l_bracket = _{"["}
+r_bracket = _{"]"}
+bar = _{"|"}
+
+comma = _{","}
+op = _{ op_plus | op_minus | op_times | op_lt | op_concat }
+op_plus = {"+"}
+op_minus = {"-"}
+op_times = {"*"}
+op_lt = {"<"}
+op_concat = {"::"}
+
+WHITESPACE = _{ " " | "\t" | "\n" }

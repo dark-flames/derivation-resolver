@@ -11,7 +11,6 @@ pub mod derive;
 pub mod parser;
 pub mod rules;
 pub mod syntax;
-mod visitor;
 
 pub struct EvalML3;
 

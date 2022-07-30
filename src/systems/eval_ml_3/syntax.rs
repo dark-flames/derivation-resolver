@@ -1,3 +1,4 @@
+use crate::error::Error;
 use crate::systems::common::print::PrintVisitor;
 use crate::systems::common::syntax::AstRoot;
 use crate::systems::common::syntax::*;
@@ -20,17 +21,17 @@ pub enum EvalML3Node {
 impl Visitable for EvalML3Node {}
 
 impl AsOpNums for EvalML3Node {
-    fn need_paren(&self, op: Op) -> bool {
+    fn need_paren(&self, op: Op, left: bool) -> bool {
         match self {
-            EvalML3Node::Integer(n) => AsOpNums::need_paren(n, op),
-            EvalML3Node::Boolean(n) => AsOpNums::need_paren(n, op),
-            EvalML3Node::Variable(n) => AsOpNums::need_paren(n, op),
-            EvalML3Node::OpTerm(n) => AsOpNums::need_paren(n, op),
-            EvalML3Node::IfTerm(n) => AsOpNums::need_paren(n, op),
-            EvalML3Node::LetInTerm(n) => AsOpNums::need_paren(n, op),
-            EvalML3Node::FunctionTerm(n) => AsOpNums::need_paren(n, op),
-            EvalML3Node::ApplicationTerm(n) => AsOpNums::need_paren(n, op),
-            EvalML3Node::LetRecInTerm(n) => AsOpNums::need_paren(n, op),
+            EvalML3Node::Integer(n) => AsOpNums::need_paren(n, op, left),
+            EvalML3Node::Boolean(n) => AsOpNums::need_paren(n, op, left),
+            EvalML3Node::Variable(n) => AsOpNums::need_paren(n, op, left),
+            EvalML3Node::OpTerm(n) => AsOpNums::need_paren(n, op, left),
+            EvalML3Node::IfTerm(n) => AsOpNums::need_paren(n, op, left),
+            EvalML3Node::LetInTerm(n) => AsOpNums::need_paren(n, op, left),
+            EvalML3Node::FunctionTerm(n) => AsOpNums::need_paren(n, op, left),
+            EvalML3Node::ApplicationTerm(n) => AsOpNums::need_paren(n, op, left),
+            EvalML3Node::LetRecInTerm(n) => AsOpNums::need_paren(n, op, left),
         }
     }
 }
@@ -47,6 +48,22 @@ impl AsParam for EvalML3Node {
             EvalML3Node::FunctionTerm(n) => AsParam::need_paren(n),
             EvalML3Node::ApplicationTerm(n) => AsParam::need_paren(n),
             EvalML3Node::LetRecInTerm(n) => AsParam::need_paren(n),
+        }
+    }
+}
+
+impl AsListSeg for EvalML3Node {
+    fn need_paren(&self, left: bool) -> bool {
+        match self {
+            EvalML3Node::Integer(n) => AsListSeg::need_paren(n, left),
+            EvalML3Node::Boolean(n) => AsListSeg::need_paren(n, left),
+            EvalML3Node::Variable(n) => AsListSeg::need_paren(n, left),
+            EvalML3Node::OpTerm(n) => AsListSeg::need_paren(n, left),
+            EvalML3Node::IfTerm(n) => AsListSeg::need_paren(n, left),
+            EvalML3Node::LetInTerm(n) => AsListSeg::need_paren(n, left),
+            EvalML3Node::FunctionTerm(n) => AsListSeg::need_paren(n, left),
+            EvalML3Node::ApplicationTerm(n) => AsListSeg::need_paren(n, left),
+            EvalML3Node::LetRecInTerm(n) => AsListSeg::need_paren(n, left),
         }
     }
 }
@@ -129,5 +146,16 @@ impl AstRoot for EvalML3Node {
         Self: Sized,
     {
         Ok(EvalML3Node::LetRecInTerm(node))
+    }
+
+    fn nil_list() -> crate::derive::Result<Self> {
+        Err(Error::UnsupportedSyntax)
+    }
+
+    fn list_concat(_node: ListConcatNode<Self>) -> crate::derive::Result<Self>
+    where
+        Self: Sized,
+    {
+        Err(Error::UnsupportedSyntax)
     }
 }

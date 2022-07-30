@@ -20,6 +20,11 @@ pub enum Error {
     ParseError(String),
     #[error("NotEvalToJudgement")]
     NotEvalToJudgement,
+    #[error("UnsupportedSyntax")]
+    UnsupportedSyntax,
+
+    #[error("UnsupportedPattern")]
+    UnsupportedPattern,
 }
 
 impl<R: RuleType> From<pest::error::Error<R>> for Error {
