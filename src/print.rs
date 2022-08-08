@@ -40,6 +40,12 @@ impl TokenBuffer {
         self.write_char('}')
     }
 
+    pub fn commit_inline_block(&mut self, block: TokenBlock) -> FmtResult {
+        self.line
+            .extend(block.tokens.into_iter().map(|(_, t)| t).flatten());
+        Ok(())
+    }
+
     pub fn freeze(mut self) -> Result<TokenBlock, FmtError> {
         if !self.line.is_empty() {
             self.commit_line(false)?;

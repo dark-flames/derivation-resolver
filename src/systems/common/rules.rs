@@ -26,5 +26,22 @@ rules![
     (B_PLUS, "B-Plus"),
     (B_MINUS, "B-Minus"),
     (B_TIMES, "B-Times"),
-    (B_LT, "B-Lt")
+    (B_LT, "B-Lt"),
+    //typed
+    (T_INT, "T-Int"),
+    (T_BOOL, "T-Bool"),
+    (T_VAR, "T-Var"),
+    (T_IF, "T-If"),
+    (T_PLUS, "T-Plus"),
+    (T_MINUS, "T-Minus"),
+    (T_TIMES, "T-Times"),
+    (T_LT, "T-Lt"),
+    (T_LET, "T-Let"),
+    (T_ABS, "T-Abs"),
+    (T_APP, "T-App"),
+    (T_LET_REC, "T-LetRec"),
+    (T_NIL, "T-Nil"),
+    (T_CONS, "T-Cons"),
+    (E_MATCH_NIL, "E-MatchNil"),
+    (E_MATCH_CONS, "E-MatchCons")
 ];

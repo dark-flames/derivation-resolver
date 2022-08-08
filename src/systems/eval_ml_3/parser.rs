@@ -1,3 +1,11 @@
+use std::result::Result as StdResult;
+
+use lazy_static::lazy_static;
+use pest::error::Error;
+use pest::iterators::{Pair, Pairs};
+use pest::prec_climber::{Assoc, Operator, PrecClimber};
+use pest::Position;
+
 use crate::derive::{Parse, ParseAs, ParseNextAs};
 use crate::systems::common::env::NamedEnv;
 use crate::systems::common::judgement::{
@@ -10,12 +18,6 @@ use crate::systems::common::syntax::{
 use crate::systems::common::value::{Function, RecursiveFunction, Value};
 use crate::systems::eval_ml_3::syntax::EvalML3Node;
 use crate::utils::error_span;
-use lazy_static::lazy_static;
-use pest::error::Error;
-use pest::iterators::{Pair, Pairs};
-use pest::prec_climber::{Assoc, Operator, PrecClimber};
-use pest::Position;
-use std::result::Result as StdResult;
 
 #[derive(Parser)]
 #[grammar = "systems/eval_ml_3/grammar.pest"]

@@ -1,18 +1,18 @@
+use pest::iterators::Pairs;
+use pest::Position;
+
 use crate::derive::{Derivable, DerivationTree, ParseNextAs, Result};
 use crate::pest::Parser;
+use crate::System;
 use crate::systems::common::env::NamedEnv;
 use crate::systems::common::judgement::Judgement;
 use crate::systems::eval_ml_4::parser::ASTParser;
 use crate::systems::eval_ml_4::syntax::EvalML4Node;
-use crate::System;
-use pest::iterators::Pairs;
-use pest::Position;
 
 mod derive;
 mod parser;
 mod rules;
 mod syntax;
-mod visitor;
 
 pub struct EvalML4;
 

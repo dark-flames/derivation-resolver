@@ -1,12 +1,13 @@
+use std::fmt::{Debug, Result as FmtResult};
+
 use crate::derive::Result;
 use crate::systems::common::syntax::{
-    ApplicationNode, AsListSeg, AsOpNums, AsParam, AstRoot, BooleanNode, FunctionNode, Ident,
-    IfNode, IntegerNode, LetInNode, LetRecInNode, ListConcatNode,
-    NilListNode, Op, OpNode, VariableNode,
+    ApplicationNode, AsListSeg, AsOpNums, AsParam, AstRoot, BooleanNode, FunctionNode, IfNode,
+    IntegerNode, LetInNode, LetRecInNode, ListConcatNode, ListPatternMatchNode, NilListNode, Op,
+    OpNode, VariableNode,
 };
 use crate::visitor::Visitor;
 use crate::{PrintVisitor, Visitable};
-use std::fmt::{Debug, Result as FmtResult, Write};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EvalML4Node {
@@ -157,6 +158,13 @@ impl AstRoot for EvalML4Node {
     {
         Ok(EvalML4Node::ListConcatTerm(node))
     }
+
+    fn list_pattern_match(node: ListPatternMatchNode<Self>) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        Ok(EvalML4Node::ListPatternMatchTerm(node))
+    }
 }
 
 impl Visitor<EvalML4Node, FmtResult> for PrintVisitor {
@@ -175,50 +183,5 @@ impl Visitor<EvalML4Node, FmtResult> for PrintVisitor {
             EvalML4Node::ListConcatTerm(n) => n.apply_visitor(self),
             EvalML4Node::ListPatternMatchTerm(n) => n.apply_visitor(self),
         }
-    }
-}
-
-#[derive(Clone, Eq, PartialEq, Debug)]
-pub struct ListPatternMatchNode<Node: AstRoot> {
-    pub expr: Box<Node>,
-    pub nil_pattern: Box<Node>,
-    pub head_id: Ident,
-    pub tail_id: Ident,
-    pub list_pattern: Box<Node>,
-}
-
-impl<Node: AstRoot> Visitable for ListPatternMatchNode<Node> {}
-
-impl<Node: AstRoot> AsOpNums for ListPatternMatchNode<Node> {
-    fn need_paren(&self, _op: Op, left: bool) -> bool {
-        left
-    }
-}
-
-impl<Node: AstRoot> AsParam for ListPatternMatchNode<Node> {}
-
-impl<Node: AstRoot> AsListSeg for ListPatternMatchNode<Node> {
-    fn need_paren(&self, left: bool) -> bool {
-        left
-    }
-}
-
-impl<Ast: AstRoot> Visitor<ListPatternMatchNode<Ast>, FmtResult> for PrintVisitor
-where
-    Self: Visitor<Ast, FmtResult>,
-{
-    fn visit(&mut self, node: &ListPatternMatchNode<Ast>) -> FmtResult {
-        self.buffer.write_str("match")?;
-        node.expr.apply_visitor(self)?;
-        self.buffer.write_str("with")?;
-        self.buffer.write_str("[]")?;
-        self.buffer.write_str("->")?;
-        node.nil_pattern.apply_visitor(self)?;
-        self.buffer.write_str("|")?;
-        self.buffer.write_str(node.head_id.as_str())?;
-        self.buffer.write_str("::")?;
-        self.buffer.write_str(node.tail_id.as_str())?;
-        self.buffer.write_str("->")?;
-        node.list_pattern.apply_visitor(self)
     }
 }

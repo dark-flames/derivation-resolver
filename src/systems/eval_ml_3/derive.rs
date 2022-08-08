@@ -1,8 +1,10 @@
+use std::fmt::Result as FmtResult;
+
 use crate::derive::{Derivable, DerivationTree, Result};
 use crate::error::Error;
 use crate::print::TokenBuffer;
-use crate::systems::common::derive::DeriveVisitor;
-use crate::systems::common::env::{Env, NamedEnv};
+use crate::systems::common::env::NamedEnv;
+use crate::systems::common::eval::UntypedDeriveVisitor;
 use crate::systems::common::judgement::{
     EvalToJudgement, Judgement, LtIsJudgement, MinusIsJudgement, PlusIsJudgement, TimesIsJudgement,
 };
@@ -13,11 +15,10 @@ use crate::systems::common::value::Value;
 use crate::systems::eval_ml_3::rules::{E_VAR1, E_VAR2};
 use crate::systems::eval_ml_3::syntax::EvalML3Node;
 use crate::visitor::{Visitable, Visitor};
-use std::fmt::Result as FmtResult;
 
 impl<Ast: AstRoot> Derivable for Judgement<NamedEnv<Ast>>
 where
-    DeriveVisitor<NamedEnv<Ast>>: Visitor<Ast, Result<DerivationTree<Self>>>,
+    UntypedDeriveVisitor<Ast>: Visitor<Ast, Result<DerivationTree<Self>>>,
     PrintVisitor: Visitor<Ast, FmtResult> + Visitor<Value<NamedEnv<Ast>>, FmtResult>,
 {
     fn derive(self) -> Result<DerivationTree<Self>>
@@ -25,7 +26,7 @@ where
         Self: Sized,
     {
         if let Judgement::EvalTo(eval_to) = self {
-            let mut visitor = DeriveVisitor::new(eval_to.env.clone());
+            let mut visitor = UntypedDeriveVisitor::new(eval_to.env.clone());
             let tree = eval_to.term.apply_visitor(&mut visitor)?;
 
             let value = tree.judgement.eval_result()?;
@@ -95,7 +96,7 @@ where
 }
 
 impl Visitor<VariableNode, Result<DerivationTree<Judgement<NamedEnv<EvalML3Node>>>>>
-    for DeriveVisitor<NamedEnv<EvalML3Node>>
+    for UntypedDeriveVisitor<EvalML3Node>
 {
     fn visit(
         &mut self,
@@ -103,7 +104,7 @@ impl Visitor<VariableNode, Result<DerivationTree<Judgement<NamedEnv<EvalML3Node>
     ) -> Result<DerivationTree<Judgement<NamedEnv<EvalML3Node>>>> {
         let id = &node.0;
         self.env
-            .lookup_named(
+            .lookup_and_back(
                 |cur_id, value, env| {
                     (cur_id.is_some() && id == cur_id.unwrap()).then(|| {
                         Ok(DerivationTree::new(
@@ -131,12 +132,12 @@ impl Visitor<VariableNode, Result<DerivationTree<Judgement<NamedEnv<EvalML3Node>
                     })
                 },
             )
-            .ok_or(Error::UnknownIdentifier)?
+            .ok_or_else(|| Error::UnknownIdentifier(node.0.clone()))?
     }
 }
 
 impl Visitor<EvalML3Node, Result<DerivationTree<Judgement<NamedEnv<EvalML3Node>>>>>
-    for DeriveVisitor<NamedEnv<EvalML3Node>>
+    for UntypedDeriveVisitor<EvalML3Node>
 {
     fn visit(
         &mut self,

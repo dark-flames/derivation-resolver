@@ -1,7 +1,9 @@
 pub mod env;
+pub mod eval;
 pub mod judgement;
 pub mod print;
 pub mod rules;
 pub mod syntax;
+pub mod ty;
+pub mod tyck;
 pub mod value;
-pub mod derive;

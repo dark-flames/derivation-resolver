@@ -1,3 +1,11 @@
+use std::result::Result as StdResult;
+
+use lazy_static::lazy_static;
+use pest::error::Error;
+use pest::iterators::{Pair, Pairs};
+use pest::Position;
+use pest::prec_climber::{Assoc, Operator, PrecClimber};
+
 use crate::derive::{Parse, ParseAs, ParseNextAs};
 use crate::systems::common::env::NamedEnv;
 use crate::systems::common::judgement::{
@@ -5,17 +13,11 @@ use crate::systems::common::judgement::{
 };
 use crate::systems::common::syntax::{
     ApplicationNode, BooleanNode, FunctionNode, Ident, IfNode, IntegerNode, LetInNode,
-    LetRecInNode, ListConcatNode, NilListNode, Op, OpNode, VariableNode,
+    LetRecInNode, ListConcatNode, ListPatternMatchNode, NilListNode, Op, OpNode, VariableNode,
 };
 use crate::systems::common::value::{ConcatList, Function, RecursiveFunction, Value};
-use crate::systems::eval_ml_4::syntax::{EvalML4Node, ListPatternMatchNode};
+use crate::systems::eval_ml_4::syntax::EvalML4Node;
 use crate::utils::{error_pos, error_span};
-use lazy_static::lazy_static;
-use pest::error::Error;
-use pest::iterators::{Pair, Pairs};
-use pest::prec_climber::{Assoc, Operator, PrecClimber};
-use pest::Position;
-use std::result::Result as StdResult;
 
 #[derive(Parser)]
 #[grammar = "systems/eval_ml_4/grammar.pest"]
@@ -251,10 +253,10 @@ impl Parse<Rule> for EvalML4Node {
 
                 Ok(EvalML4Node::ListPatternMatchTerm(ListPatternMatchNode {
                     expr: Box::new(expr),
-                    nil_pattern: Box::new(nil_pat),
+                    nil_branch: Box::new(nil_pat),
                     head_id,
                     tail_id,
-                    list_pattern: Box::new(list_pat),
+                    list_branch: Box::new(list_pat),
                 }))
             }
             _ => unreachable!(),

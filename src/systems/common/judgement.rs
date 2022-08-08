@@ -2,8 +2,9 @@ use crate::derive::{Judgement as JudgementTrait, Result};
 use crate::error::Error;
 use crate::systems::common::env::Env;
 use crate::systems::common::syntax::Op;
+use crate::systems::common::ty::PolyType;
 use crate::systems::common::value::Value;
-use crate::visitor::Visitable;
+use crate::visitor::{MutVisitable, Visitable};
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct PlusIsJudgement(pub i64, pub i64, pub i64);
@@ -33,7 +34,16 @@ pub struct EvalToJudgement<E: Env> {
     pub value: Value<E>,
 }
 
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct TypeJudgement<E: Env> {
+    pub env: E,
+    pub term: E::Ast,
+    pub ty: PolyType,
+}
+
 impl<E: Env> JudgementTrait for Judgement<E> {}
+
+impl<E: Env> JudgementTrait for TypeJudgement<E> {}
 
 impl<E: Env> EvalToJudgement<E> {
     pub fn new(env: E, term: E::Ast, value: Value<E>) -> Self {
@@ -82,6 +92,10 @@ impl<E: Env> Judgement<E> {
 impl<E: Env> Visitable for Judgement<E> {}
 
 impl<E: Env> Visitable for EvalToJudgement<E> {}
+
+impl<E: Env> Visitable for TypeJudgement<E> {}
+
+impl<E: Env> MutVisitable for TypeJudgement<E> {}
 
 impl Visitable for PlusIsJudgement {}
 

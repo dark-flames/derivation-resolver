@@ -8,8 +8,8 @@ pub enum Error {
     NonIntegerValue,
     #[error("NonBooleanValue")]
     NonBooleanValue,
-    #[error("UnknownIdentifier")]
-    UnknownIdentifier,
+    #[error("UnknownIdentifier: {0}")]
+    UnknownIdentifier(String),
     #[error("ApplyOnNonFunctionValue")]
     ApplyOnNonFunctionValue,
     #[error("ToTokenError: {0}")]
@@ -25,6 +25,17 @@ pub enum Error {
 
     #[error("UnsupportedPattern")]
     UnsupportedPattern,
+
+    #[error("UnknownHole:{0}")]
+    UnknownHole(usize),
+    #[error("UnificationError: Cannot normalize {0} with {1}")]
+    UnificationError(String, String),
+    #[error("TypeCheckAsError: Cannot type check {0} as {1}")]
+    TypeCheckAsError(String, String),
+    #[error("TypeCheckError: Cannot type check {0} without assertion")]
+    TypeCheckError(String),
+    #[error("SubstitutionError")]
+    SubstitutionError,
 }
 
 impl<R: RuleType> From<pest::error::Error<R>> for Error {

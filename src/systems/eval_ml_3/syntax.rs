@@ -1,4 +1,3 @@
-use crate::error::Error;
 use crate::systems::common::print::PrintVisitor;
 use crate::systems::common::syntax::AstRoot;
 use crate::systems::common::syntax::*;
@@ -146,16 +145,5 @@ impl AstRoot for EvalML3Node {
         Self: Sized,
     {
         Ok(EvalML3Node::LetRecInTerm(node))
-    }
-
-    fn nil_list() -> crate::derive::Result<Self> {
-        Err(Error::UnsupportedSyntax)
-    }
-
-    fn list_concat(_node: ListConcatNode<Self>) -> crate::derive::Result<Self>
-    where
-        Self: Sized,
-    {
-        Err(Error::UnsupportedSyntax)
     }
 }

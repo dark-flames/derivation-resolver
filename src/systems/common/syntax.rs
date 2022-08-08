@@ -1,8 +1,10 @@
+use std::cmp::Ordering;
+
 use crate::derive::Result;
-use crate::systems::common::env::Env;
+use crate::error::Error;
+use crate::systems::common::env::{Env, TypedEnv};
 use crate::systems::common::value::Value;
 use crate::visitor::Visitable;
-use std::cmp::Ordering;
 
 pub trait AsOpNums: Visitable {
     fn need_paren(&self, _op: Op, _left: bool) -> bool {
@@ -21,49 +23,96 @@ pub trait AsListSeg: Visitable {
         false
     }
 }
+pub trait AsTypedTerm<Ast: AstRoot> {
+    fn need_hint(&self, _env: &TypedEnv<Ast>) -> bool {
+        true
+    }
+}
 
 pub trait AstRoot: Visitable {
-    fn integer(value: i64) -> Result<Self>
+    fn integer(_value: i64) -> Result<Self>
     where
-        Self: Sized;
+        Self: Sized,
+    {
+        Err(Error::UnsupportedSyntax)
+    }
 
-    fn boolean(value: bool) -> Result<Self>
+    fn boolean(_value: bool) -> Result<Self>
     where
-        Self: Sized;
+        Self: Sized,
+    {
+        Err(Error::UnsupportedSyntax)
+    }
 
-    fn variable(name: String) -> Result<Self>
+    fn variable(_name: String) -> Result<Self>
     where
-        Self: Sized;
+        Self: Sized,
+    {
+        Err(Error::UnsupportedSyntax)
+    }
 
-    fn op_term(node: OpNode<Self>) -> Result<Self>
+    fn op_term(_node: OpNode<Self>) -> Result<Self>
     where
-        Self: Sized + AsOpNums;
+        Self: Sized + AsOpNums,
+    {
+        Err(Error::UnsupportedSyntax)
+    }
 
-    fn if_term(node: IfNode<Self>) -> Result<Self>
+    fn if_term(_node: IfNode<Self>) -> Result<Self>
     where
-        Self: Sized;
+        Self: Sized,
+    {
+        Err(Error::UnsupportedSyntax)
+    }
 
-    fn let_in_term(node: LetInNode<Self>) -> Result<Self>
+    fn let_in_term(_node: LetInNode<Self>) -> Result<Self>
     where
-        Self: Sized;
+        Self: Sized,
+    {
+        Err(Error::UnsupportedSyntax)
+    }
 
-    fn function_term(node: FunctionNode<Self>) -> Result<Self>
+    fn function_term(_node: FunctionNode<Self>) -> Result<Self>
     where
-        Self: Sized;
+        Self: Sized,
+    {
+        Err(Error::UnsupportedSyntax)
+    }
 
-    fn application_term(node: ApplicationNode<Self>) -> Result<Self>
+    fn application_term(_node: ApplicationNode<Self>) -> Result<Self>
     where
-        Self: Sized + AsParam;
+        Self: Sized + AsParam,
+    {
+        Err(Error::UnsupportedSyntax)
+    }
 
-    fn let_rec_in_term(node: LetRecInNode<Self>) -> Result<Self>
+    fn let_rec_in_term(_node: LetRecInNode<Self>) -> Result<Self>
     where
-        Self: Sized;
+        Self: Sized,
+    {
+        Err(Error::UnsupportedSyntax)
+    }
 
-    fn nil_list() -> Result<Self>;
-
-    fn list_concat(node: ListConcatNode<Self>) -> Result<Self>
+    fn nil_list() -> Result<Self>
     where
-        Self: Sized;
+        Self: Sized,
+    {
+        Err(Error::UnsupportedSyntax)
+    }
+
+    fn list_concat(_node: ListConcatNode<Self>) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        Err(Error::UnsupportedSyntax)
+    }
+
+    fn list_pattern_match(_node: ListPatternMatchNode<Self>) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        Err(Error::UnsupportedSyntax)
+    }
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -131,6 +180,15 @@ pub struct NilListNode;
 pub struct ListConcatNode<Node: AstRoot> {
     pub lhs: Box<Node>,
     pub rhs: Box<Node>,
+}
+
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct ListPatternMatchNode<Node: AstRoot> {
+    pub expr: Box<Node>,
+    pub nil_branch: Box<Node>,
+    pub head_id: Ident,
+    pub tail_id: Ident,
+    pub list_branch: Box<Node>,
 }
 
 impl Visitable for IntegerNode {}
@@ -285,3 +343,19 @@ impl PartialOrd for Op {
 impl Visitable for Op {}
 
 pub type Ident = String;
+
+impl<Node: AstRoot> Visitable for ListPatternMatchNode<Node> {}
+
+impl<Node: AstRoot> AsOpNums for ListPatternMatchNode<Node> {
+    fn need_paren(&self, _op: Op, left: bool) -> bool {
+        left
+    }
+}
+
+impl<Node: AstRoot> AsParam for ListPatternMatchNode<Node> {}
+
+impl<Node: AstRoot> AsListSeg for ListPatternMatchNode<Node> {
+    fn need_paren(&self, left: bool) -> bool {
+        left
+    }
+}

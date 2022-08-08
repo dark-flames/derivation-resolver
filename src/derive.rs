@@ -1,6 +1,6 @@
 use crate::error::Error;
 use crate::utils::error_pos;
-use crate::visitor::{Visitable, Visitor};
+use crate::visitor::{MutVisitable, Visitable, Visitor};
 use pest::error::Error as PestError;
 use pest::iterators::{Pair, Pairs};
 use pest::{Position, RuleType};
@@ -120,3 +120,4 @@ impl<J: Judgement> Visitable for DerivationTree<J> {
         visitor.visit(self)
     }
 }
+impl<J: Judgement> MutVisitable for DerivationTree<J> {}

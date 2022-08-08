@@ -1,25 +1,33 @@
+use std::collections::HashMap;
+use std::fmt::{Result as FmtResult, Write};
+
 use crate::derive::{DerivationTree, Judgement as JudgementTrait, Result};
 use crate::print::TokenBuffer;
-use crate::systems::common::env::{Env, NamedEnv};
+use crate::systems::common::env::{Env, NamedEnv, TypedEnv};
 use crate::systems::common::judgement::{
     EvalToJudgement, Judgement, LtIsJudgement, MinusIsJudgement, PlusIsJudgement, TimesIsJudgement,
+    TypeJudgement,
 };
 use crate::systems::common::syntax::{
     ApplicationNode, AsListSeg, AsOpNums, AsParam, AstRoot, BooleanNode, FunctionNode, IfNode,
-    IntegerNode, LetInNode, LetRecInNode, ListConcatNode, NilListNode, Op, OpNode, VariableNode,
+    IntegerNode, LetInNode, LetRecInNode, ListConcatNode, ListPatternMatchNode, NilListNode, Op,
+    OpNode, VariableNode,
 };
+use crate::systems::common::ty::{MonoType, PolyType};
 use crate::systems::common::value::{ConcatList, Function, RecursiveFunction, Value};
 use crate::visitor::{Visitable, Visitor};
-use std::fmt::{Result as FmtResult, Write};
+use alphabet::*;
 
 pub struct PrintVisitor {
     pub buffer: TokenBuffer,
+    pub ty_var_map: HashMap<usize, String>,
 }
 
 impl PrintVisitor {
     pub fn sub_visitor(&mut self) -> Self {
         PrintVisitor {
             buffer: self.buffer.sub_buffer(),
+            ty_var_map: HashMap::new(),
         }
     }
     pub fn parenthesized_visit<T: Visitable>(&mut self, node: &T) -> FmtResult
@@ -34,13 +42,21 @@ impl PrintVisitor {
     pub fn new(indent: usize) -> Self {
         Self {
             buffer: TokenBuffer::new(indent),
+            ty_var_map: HashMap::new(),
+        }
+    }
+
+    pub fn with_ty_var_map(&mut self, ty_var_map: HashMap<usize, String>) -> Self {
+        PrintVisitor {
+            buffer: self.buffer.sub_buffer(),
+            ty_var_map,
         }
     }
 
     pub fn visit_by_iter<I>(
         &mut self,
         iter: impl IntoIterator<Item = I>,
-        op: impl Fn(I, &mut Self) -> FmtResult,
+        mut op: impl FnMut(I, &mut Self) -> FmtResult,
         join: impl Fn(&mut Self) -> FmtResult,
     ) -> FmtResult {
         iter.into_iter()
@@ -368,5 +384,110 @@ where
             },
             |v| v.buffer.write_char(','),
         )
+    }
+}
+
+impl<Ast: AstRoot> Visitor<ListPatternMatchNode<Ast>, FmtResult> for PrintVisitor
+where
+    Self: Visitor<Ast, FmtResult>,
+{
+    fn visit(&mut self, node: &ListPatternMatchNode<Ast>) -> FmtResult {
+        self.buffer.write_str("match")?;
+        node.expr.apply_visitor(self)?;
+        self.buffer.write_str("with")?;
+        self.buffer.write_str("[]")?;
+        self.buffer.write_str("->")?;
+        node.nil_branch.apply_visitor(self)?;
+        self.buffer.write_str("|")?;
+        self.buffer.write_str(node.head_id.as_str())?;
+        self.buffer.write_str("::")?;
+        self.buffer.write_str(node.tail_id.as_str())?;
+        self.buffer.write_str("->")?;
+        node.list_branch.apply_visitor(self)
+    }
+}
+
+impl Visitor<MonoType, FmtResult> for PrintVisitor {
+    fn visit(&mut self, node: &MonoType) -> FmtResult {
+        match node {
+            MonoType::Integer => self.buffer.write_str("int"),
+            MonoType::Bool => self.buffer.write_str("bool"),
+            MonoType::Var(i) => {
+                if let Some(ident) = self.ty_var_map.get(i) {
+                    self.buffer.write_char('\'')?;
+                    self.buffer.write_str(ident)
+                } else {
+                    self.buffer.write_str("Hole(")?;
+                    write!(self.buffer, "{}", i)?;
+                    self.buffer.write_char(')')
+                }
+            }
+            MonoType::Lambda(box p, box b) => {
+                if matches!(p, MonoType::Lambda(_, _) | MonoType::List(_)) {
+                    self.parenthesized_visit(p)?;
+                } else {
+                    p.apply_visitor(self)?;
+                }
+                self.buffer.write_str("->")?;
+                if matches!(b, MonoType::Lambda(_, _) | MonoType::List(_)) {
+                    self.parenthesized_visit(b)
+                } else {
+                    b.apply_visitor(self)
+                }
+            }
+            MonoType::List(box l) => {
+                if matches!(l, MonoType::Lambda(_, _) | MonoType::List(_)) {
+                    self.parenthesized_visit(l)?;
+                } else {
+                    l.apply_visitor(self)?;
+                }
+                self.buffer.write_str("list")
+            }
+        }
+    }
+}
+
+impl Visitor<PolyType, FmtResult> for PrintVisitor {
+    fn visit(&mut self, node: &PolyType) -> FmtResult {
+        let mut hole_map = HashMap::new();
+        alphabet!(ENGLISH = "abcdefghijklmnopqrstuvwxyz");
+        let mut ident_iter = ENGLISH.iter_words();
+        ident_iter.next();
+        for (bind, ident) in node.binds.iter().zip(ident_iter.take(node.binds.len())) {
+            hole_map.insert(bind.clone(), ident);
+        }
+        let mut ty_visitor = self.with_ty_var_map(hole_map);
+        node.ty.apply_visitor(&mut ty_visitor)?;
+        self.buffer.commit_inline_block(ty_visitor.buffer.freeze()?)
+    }
+}
+
+impl<Ast: AstRoot> Visitor<TypedEnv<Ast>, FmtResult> for PrintVisitor
+where
+    Self: Visitor<Ast, FmtResult>,
+{
+    fn visit(&mut self, node: &TypedEnv<Ast>) -> FmtResult {
+        self.visit_by_iter(
+            node.env.iter(),
+            |(id, ty), v| {
+                v.buffer.write_str(id)?;
+                v.buffer.write_char(':')?;
+                ty.apply_visitor(v)
+            },
+            |v| v.buffer.write_char(','),
+        )
+    }
+}
+
+impl<Ast: AstRoot> Visitor<TypeJudgement<TypedEnv<Ast>>, FmtResult> for PrintVisitor
+where
+    Self: Visitor<Ast, FmtResult> + Visitor<TypedEnv<Ast>, FmtResult>,
+{
+    fn visit(&mut self, node: &TypeJudgement<TypedEnv<Ast>>) -> FmtResult {
+        node.env.apply_visitor(self)?;
+        self.buffer.write_str("|-")?;
+        node.term.apply_visitor(self)?;
+        self.buffer.write_str(":")?;
+        node.ty.apply_visitor(self)
     }
 }
