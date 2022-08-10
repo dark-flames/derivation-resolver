@@ -5,18 +5,22 @@ judgement = _{
 }
 
 typing_judgement = {
-    env ~ v_dash ~ term ~ colon ~ ~ 
+    typed_env ~ v_dash ~ term ~ colon ~ mono_ty
 }
 
-env = {
-    env_segment? ~ (comma ~ env_segment)*
+typed_env = {
+    typed_env_segment? ~ (comma ~ typed_env_segment)*
 }
 
-env_segment = {
-    ident ~ assign ~ value
+typed_env_segment = {
+    ident ~ colon ~ poly_ty
 }
 
-type = {}
+poly_ty = { ( (ty_var)+ ~ dot )? ~ mono_ty }
+
+atom_ty = { ty_var | keyword_bool | keyword_int | l_paren ~ mono_ty ~ r_paren }
+list_ty = { atom_ty ~ (keyword_list)? }
+mono_ty = { list_ty ~ (arrow ~ list_ty)* }
 
 nil_list_term = {l_bracket ~ r_bracket}
 fun_term = { keyword_fun ~ ident ~ arrow ~ term }
@@ -61,11 +65,11 @@ non_cons_value =  {
     value_nil_list
 }
 value_fun = {
-   l_paren ~ env ~ r_paren ~ l_bracket ~ keyword_fun ~ ident ~ arrow ~ term ~ r_bracket
+   l_paren ~ typed_env ~ r_paren ~ l_bracket ~ keyword_fun ~ ident ~ arrow ~ term ~ r_bracket
 }
 
 value_rec_fun = {
-    l_paren ~ env ~ r_paren ~ l_bracket ~ keyword_rec ~ ident ~ assign ~ keyword_fun ~ ident ~ arrow ~ term ~ r_bracket
+    l_paren ~ typed_env ~ r_paren ~ l_bracket ~ keyword_rec ~ ident ~ assign ~ keyword_fun ~ ident ~ arrow ~ term ~ r_bracket
 }
 
 value_nil_list = { l_bracket ~ r_bracket }
@@ -75,10 +79,15 @@ digit = _{ '0'..'9' }
 unsigned_int = @{ digit ~ (digit)* }
 integer = @{ "-"? ~ unsigned_int }
 ident = @{ !(keyword) ~ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
+ty_var = @{ prime ~ (!(keyword) ~ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")*) }
 boolean = @{ keyword_true | keyword_false }
 
 // Keyword
-keyword = { keyword_fun | keyword_rec | keyword_if | keyword_then | keyword_else | keyword_let | keyword_in | keyword_eval_to | keyword_is | keyword_plus | keyword_minus | keyword_times | keyword_match | keyword_with | keyword_true | keyword_false }
+keyword = {
+    keyword_fun | keyword_rec | keyword_if | keyword_then | keyword_else | keyword_let | keyword_in
+     | keyword_is | keyword_plus | keyword_minus | keyword_times | keyword_match | keyword_with
+     | keyword_true | keyword_false | keyword_int | keyword_bool | keyword_list
+}
 keyword_fun = _{"fun"}
 keyword_rec = _{"rec"}
 keyword_if = _{"if"}
@@ -86,7 +95,6 @@ keyword_then = _{"then"}
 keyword_else = _{"else"}
 keyword_let = _{"let"}
 keyword_in = _{"in"}
-keyword_eval_to = _{"evalto"}
 keyword_is = _{"is"}
 keyword_plus = _{"plus"}
 keyword_minus = _{"minus"}
@@ -110,6 +118,8 @@ l_bracket = _{"["}
 r_bracket = _{"]"}
 bar = _{"|"}
 colon = _{":"}
+prime = _{"\'"}
+dot = _{"."}
 
 comma = _{","}
 op = _{ op_plus | op_minus | op_times | op_lt | op_concat }

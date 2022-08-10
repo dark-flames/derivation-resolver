@@ -1,13 +1,13 @@
 use std::fmt::{Debug, Result as FmtResult};
 
 use crate::derive::Result;
+use crate::systems::common::print::PrintVisitor;
 use crate::systems::common::syntax::{
     ApplicationNode, AsListSeg, AsOpNums, AsParam, AstRoot, BooleanNode, FunctionNode, IfNode,
     IntegerNode, LetInNode, LetRecInNode, ListConcatNode, ListPatternMatchNode, NilListNode, Op,
     OpNode, VariableNode,
 };
-use crate::visitor::Visitor;
-use crate::{PrintVisitor, Visitable};
+use crate::visitor::{Visitable, Visitor};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EvalML4Node {

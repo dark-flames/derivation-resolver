@@ -37,12 +37,37 @@ pub trait ParseAs<'i, R: RuleType, T: Sized> {
     fn parse_with_pos(self) -> StdResult<(T, Position<'i>), PestError<R>>
     where
         Self: Sized;
+
+    fn parse_boxed(self) -> StdResult<Box<T>, PestError<R>>
+    where
+        Self: Sized,
+    {
+        self.parse().map(Box::new)
+    }
+
+    fn parse_boxed_with_pos(self) -> StdResult<(Box<T>, Position<'i>), PestError<R>>
+    where
+        Self: Sized,
+    {
+        self.parse_with_pos().map(|(r, p)| (Box::new(r), p))
+    }
 }
 
 pub trait ParseNextAs<'i, R: RuleType, T: Sized> {
     fn parse_next(&mut self, pos: Position) -> StdResult<T, PestError<R>>;
 
     fn parse_next_with_pos(&mut self, pos: Position) -> StdResult<(T, Position<'i>), PestError<R>>;
+
+    fn parse_boxed_next(&mut self, pos: Position) -> StdResult<Box<T>, PestError<R>> {
+        self.parse_next(pos).map(Box::new)
+    }
+
+    fn parse_boxed_next_with_pos(
+        &mut self,
+        pos: Position,
+    ) -> StdResult<(Box<T>, Position<'i>), PestError<R>> {
+        self.parse_next_with_pos(pos).map(|(r, p)| (Box::new(r), p))
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -59,15 +84,6 @@ impl<J: Judgement> DerivationTree<J> {
             reason,
             premises,
         }
-    }
-}
-
-impl<R: RuleType, T: Parse<R>> Parse<R> for Box<T> {
-    fn parse(entry_pair: Pair<R>) -> StdResult<Self, PestError<R>>
-    where
-        Self: Sized,
-    {
-        entry_pair.parse().map(Box::new)
     }
 }
 
@@ -88,7 +104,7 @@ impl<'i, R: RuleType, T: Parse<R>> ParseAs<'i, R, T> for Pair<'i, R> {
     }
 }
 
-impl<'i, R: RuleType, T: Parse<R>> ParseNextAs<'i, R, T> for Pairs<'i, R> {
+impl<'i, R: RuleType, T: Parse<R>, I: Iterator<Item = Pair<'i, R>>> ParseNextAs<'i, R, T> for I {
     fn parse_next(&mut self, pos: Position) -> StdResult<T, PestError<R>> {
         self.next()
             .ok_or_else(|| {

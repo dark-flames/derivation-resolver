@@ -11,14 +11,14 @@ mod systems;
 mod utils;
 mod visitor;
 
-use crate::derive::System;
-use crate::systems::common::print::PrintVisitor;
-use crate::visitor::Visitable;
-use std::env::args;
-use std::fs::read_to_string;
-use systems::DerivationSystem;
-
+#[cfg(any(feature = "eval-ml-3", feature = "eval-ml-4", feature = "poly-ml-4"))]
 fn main() {
+    use crate::derive::System;
+    use crate::systems::common::print::PrintVisitor;
+    use crate::visitor::Visitable;
+    use std::env::args;
+    use std::fs::read_to_string;
+    use systems::DerivationSystem;
     let mut args = args();
     args.next();
     let file = args.next().expect("No input file").to_string();

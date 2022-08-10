@@ -1,9 +1,6 @@
-use crate::systems::common::env::TypedEnv;
-use crate::systems::common::syntax::*;
 use crate::systems::common::tyck::{TyckResult, TypeCheckVisitor};
 use crate::systems::poly_ml_4::syntax::PolyML4Node;
-use crate::visitor::Visitor;
-use crate::{PrintVisitor, Visitable};
+use crate::visitor::{Visitable, Visitor};
 
 impl Visitor<PolyML4Node, TyckResult<PolyML4Node>> for TypeCheckVisitor<PolyML4Node> {
     fn visit(&mut self, node: &PolyML4Node) -> TyckResult<PolyML4Node> {
@@ -26,6 +23,9 @@ impl Visitor<PolyML4Node, TyckResult<PolyML4Node>> for TypeCheckVisitor<PolyML4N
 
 #[test]
 fn test_tyck_1() {
+    use crate::systems::common::env::TypedEnv;
+    use crate::systems::common::print::PrintVisitor;
+    use crate::systems::common::syntax::*;
     use crate::systems::common::ty::MonoType;
     let term = PolyML4Node::LetInTerm(LetInNode {
         ident: "id".to_string(),
@@ -45,6 +45,7 @@ fn test_tyck_1() {
             Box::new(MonoType::Bool),
             Box::new(MonoType::Bool),
         )),
+        0,
     );
 
     let (tree, _) = term.apply_visitor(&mut visitor).unwrap();
@@ -57,6 +58,9 @@ fn test_tyck_1() {
 
 #[test]
 fn test_tyck_2() {
+    use crate::systems::common::env::TypedEnv;
+    use crate::systems::common::print::PrintVisitor;
+    use crate::systems::common::syntax::*;
     use crate::systems::common::ty::MonoType;
     let term = PolyML4Node::LetInTerm(LetInNode {
         ident: "gt".to_string(),
@@ -82,7 +86,7 @@ fn test_tyck_2() {
         })),
     });
 
-    let mut visitor = TypeCheckVisitor::new(TypedEnv::new(), Some(MonoType::Integer));
+    let mut visitor = TypeCheckVisitor::new(TypedEnv::new(), Some(MonoType::Integer), 0);
 
     let (tree, _) = term.apply_visitor(&mut visitor).unwrap();
 

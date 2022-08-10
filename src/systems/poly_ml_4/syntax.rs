@@ -1,7 +1,7 @@
 use crate::derive::Result;
+use crate::systems::common::print::PrintVisitor;
 use crate::systems::common::syntax::*;
-use crate::visitor::Visitor;
-use crate::{PrintVisitor, Visitable};
+use crate::visitor::{Visitable, Visitor};
 use std::fmt::Result as FmtResult;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

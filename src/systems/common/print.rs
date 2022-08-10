@@ -18,16 +18,22 @@ use crate::systems::common::value::{ConcatList, Function, RecursiveFunction, Val
 use crate::visitor::{Visitable, Visitor};
 use alphabet::*;
 
+alphabet!(ENGLISH = "abcdefghijklmnopqrstuvwxyz");
+
 pub struct PrintVisitor {
     pub buffer: TokenBuffer,
     pub ty_var_map: HashMap<usize, String>,
+    pub ident_iter: <[char] as Alphabet<'static>>::IterWord,
 }
 
 impl PrintVisitor {
     pub fn sub_visitor(&mut self) -> Self {
+        let mut ident_iter = ENGLISH.iter_words();
+        ident_iter.next();
         PrintVisitor {
             buffer: self.buffer.sub_buffer(),
             ty_var_map: HashMap::new(),
+            ident_iter,
         }
     }
     pub fn parenthesized_visit<T: Visitable>(&mut self, node: &T) -> FmtResult
@@ -40,16 +46,22 @@ impl PrintVisitor {
     }
 
     pub fn new(indent: usize) -> Self {
+        let mut ident_iter = ENGLISH.iter_words();
+        ident_iter.next();
         Self {
             buffer: TokenBuffer::new(indent),
             ty_var_map: HashMap::new(),
+            ident_iter,
         }
     }
 
     pub fn with_ty_var_map(&mut self, ty_var_map: HashMap<usize, String>) -> Self {
+        let mut ident_iter = ENGLISH.iter_words();
+        ident_iter.next();
         PrintVisitor {
             buffer: self.buffer.sub_buffer(),
             ty_var_map,
+            ident_iter,
         }
     }
 
@@ -413,14 +425,11 @@ impl Visitor<MonoType, FmtResult> for PrintVisitor {
             MonoType::Integer => self.buffer.write_str("int"),
             MonoType::Bool => self.buffer.write_str("bool"),
             MonoType::Var(i) => {
-                if let Some(ident) = self.ty_var_map.get(i) {
-                    self.buffer.write_char('\'')?;
-                    self.buffer.write_str(ident)
-                } else {
-                    self.buffer.write_str("Hole(")?;
-                    write!(self.buffer, "{}", i)?;
-                    self.buffer.write_char(')')
-                }
+                let entry = self.ty_var_map.entry(*i);
+
+                let ident = entry.or_insert_with(|| self.ident_iter.next().unwrap());
+                let result = format!("'{}", ident);
+                self.buffer.write_str(result.as_str())
             }
             MonoType::Lambda(box p, box b) => {
                 if matches!(p, MonoType::Lambda(_, _) | MonoType::List(_)) {
@@ -449,16 +458,16 @@ impl Visitor<MonoType, FmtResult> for PrintVisitor {
 
 impl Visitor<PolyType, FmtResult> for PrintVisitor {
     fn visit(&mut self, node: &PolyType) -> FmtResult {
-        let mut hole_map = HashMap::new();
-        alphabet!(ENGLISH = "abcdefghijklmnopqrstuvwxyz");
-        let mut ident_iter = ENGLISH.iter_words();
-        ident_iter.next();
-        for (bind, ident) in node.binds.iter().zip(ident_iter.take(node.binds.len())) {
-            hole_map.insert(bind.clone(), ident);
+        for bind in node.binds.iter() {
+            let entry = self.ty_var_map.entry(*bind);
+            let ident = entry.or_insert_with(|| self.ident_iter.next().unwrap());
+            let forall = format!("'{}", ident);
+            self.buffer.write_str(forall.as_str())?;
         }
-        let mut ty_visitor = self.with_ty_var_map(hole_map);
-        node.ty.apply_visitor(&mut ty_visitor)?;
-        self.buffer.commit_inline_block(ty_visitor.buffer.freeze()?)
+        if !node.binds.is_empty() {
+            self.buffer.write_char('.')?;
+        }
+        node.ty.apply_visitor(self)
     }
 }
 

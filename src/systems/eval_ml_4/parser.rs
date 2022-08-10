@@ -3,8 +3,8 @@ use std::result::Result as StdResult;
 use lazy_static::lazy_static;
 use pest::error::Error;
 use pest::iterators::{Pair, Pairs};
-use pest::Position;
 use pest::prec_climber::{Assoc, Operator, PrecClimber};
+use pest::Position;
 
 use crate::derive::{Parse, ParseAs, ParseNextAs};
 use crate::systems::common::env::NamedEnv;
@@ -92,7 +92,7 @@ impl Parse<Rule> for Value<NamedEnv<EvalML4Node>> {
                 let (env, pos) = inner.parse_next_with_pos(start_pos)?;
                 let (ident, pos) = inner.parse_next_with_pos(pos)?;
                 let (bind, pos) = inner.parse_next_with_pos(pos)?;
-                let body = inner.parse_next(pos)?;
+                let body = inner.parse_boxed_next(pos)?;
 
                 Ok(Value::RecFun(Box::new(RecursiveFunction {
                     env,
@@ -195,9 +195,9 @@ impl Parse<Rule> for EvalML4Node {
             Rule::if_term => {
                 let mut inner = entry_pair.into_inner();
 
-                let (cond, pos) = inner.parse_next_with_pos(pos)?;
-                let (t_branch, pos) = inner.parse_next_with_pos(pos)?;
-                let f_branch = inner.parse_next(pos)?;
+                let (cond, pos) = inner.parse_boxed_next_with_pos(pos)?;
+                let (t_branch, pos) = inner.parse_boxed_next_with_pos(pos)?;
+                let f_branch = inner.parse_boxed_next(pos)?;
 
                 Ok(EvalML4Node::IfTerm(IfNode {
                     cond,
@@ -209,8 +209,8 @@ impl Parse<Rule> for EvalML4Node {
                 let mut inner = entry_pair.into_inner();
 
                 let (ident, pos) = inner.parse_next_with_pos(pos)?;
-                let (expr_1, pos) = inner.parse_next_with_pos(pos)?;
-                let expr_2 = inner.parse_next(pos)?;
+                let (expr_1, pos) = inner.parse_boxed_next_with_pos(pos)?;
+                let expr_2 = inner.parse_boxed_next(pos)?;
 
                 Ok(EvalML4Node::LetInTerm(LetInNode {
                     ident,
@@ -222,7 +222,7 @@ impl Parse<Rule> for EvalML4Node {
                 let mut inner = entry_pair.into_inner();
 
                 let (bind, pos) = inner.parse_next_with_pos(pos)?;
-                let body = inner.parse_next(pos)?;
+                let body = inner.parse_boxed_next(pos)?;
 
                 Ok(EvalML4Node::FunctionTerm(FunctionNode { bind, body }))
             }
@@ -231,8 +231,8 @@ impl Parse<Rule> for EvalML4Node {
 
                 let (ident, pos) = inner.parse_next_with_pos(pos)?;
                 let (bind, pos) = inner.parse_next_with_pos(pos)?;
-                let (body, pos) = inner.parse_next_with_pos(pos)?;
-                let expr = inner.parse_next(pos)?;
+                let (body, pos) = inner.parse_boxed_next_with_pos(pos)?;
+                let expr = inner.parse_boxed_next(pos)?;
 
                 Ok(EvalML4Node::LetRecInTerm(LetRecInNode {
                     ident,

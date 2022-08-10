@@ -1,4 +1,5 @@
-use pest::RuleType;
+use pest::error::{Error as PestError, ErrorVariant};
+use pest::{Position, RuleType, Span};
 use std::fmt::Error as FmtError;
 use thiserror::Error;
 
@@ -47,5 +48,25 @@ impl<R: RuleType> From<pest::error::Error<R>> for Error {
 impl From<FmtError> for Error {
     fn from(r: FmtError) -> Self {
         Error::ToTokenError(r.to_string())
+    }
+}
+
+impl Error {
+    pub fn with_pos<R: RuleType>(self, pos: Position) -> PestError<R> {
+        PestError::new_from_pos(
+            ErrorVariant::CustomError {
+                message: format!("{:?}", self),
+            },
+            pos,
+        )
+    }
+
+    pub fn with_span<R: RuleType>(self, span: Span) -> PestError<R> {
+        PestError::new_from_span(
+            ErrorVariant::CustomError {
+                message: format!("{:?}", self),
+            },
+            span,
+        )
     }
 }

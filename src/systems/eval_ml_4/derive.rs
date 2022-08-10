@@ -6,8 +6,7 @@ use crate::systems::common::judgement::{EvalToJudgement, Judgement};
 use crate::systems::common::syntax::{AstRoot, VariableNode};
 use crate::systems::eval_ml_4::rules::*;
 use crate::systems::eval_ml_4::syntax::EvalML4Node;
-use crate::visitor::Visitor;
-use crate::Visitable;
+use crate::visitor::{Visitable, Visitor};
 
 impl Visitor<VariableNode, Result<DerivationTreeOf<EvalML4Node>>>
     for UntypedDeriveVisitor<EvalML4Node>

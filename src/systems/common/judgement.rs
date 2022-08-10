@@ -2,7 +2,7 @@ use crate::derive::{Judgement as JudgementTrait, Result};
 use crate::error::Error;
 use crate::systems::common::env::Env;
 use crate::systems::common::syntax::Op;
-use crate::systems::common::ty::PolyType;
+use crate::systems::common::ty::MonoType;
 use crate::systems::common::value::Value;
 use crate::visitor::{MutVisitable, Visitable};
 
@@ -38,7 +38,7 @@ pub struct EvalToJudgement<E: Env> {
 pub struct TypeJudgement<E: Env> {
     pub env: E,
     pub term: E::Ast,
-    pub ty: PolyType,
+    pub ty: MonoType,
 }
 
 impl<E: Env> JudgementTrait for Judgement<E> {}

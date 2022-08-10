@@ -1,6 +1,7 @@
 pub mod env;
 pub mod eval;
 pub mod judgement;
+pub mod parser;
 pub mod print;
 pub mod rules;
 pub mod syntax;

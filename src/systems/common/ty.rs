@@ -1,7 +1,7 @@
 use replace_with::replace_with;
 use std::cmp::{max, min};
-use std::collections::hash_map::Entry;
-use std::collections::{HashMap, HashSet};
+use std::collections::btree_map::Entry;
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt::Debug;
 
 use crate::derive::{DerivationTree, Result};
@@ -9,11 +9,18 @@ use crate::error::Error;
 use crate::systems::common::env::TypedEnv;
 use crate::systems::common::judgement::TypeJudgement;
 use crate::systems::common::syntax::AstRoot;
-use crate::visitor::{MutVisitable, MutVisitor, Visitor};
-use crate::Visitable;
+use crate::visitor::{MutVisitable, MutVisitor, Visitable, Visitor};
 
 pub fn unification_error(ty_1: &impl Debug, ty_2: &impl Debug) -> Error {
     Error::UnificationError(format!("{:?}", ty_1), format!("{:?}", ty_2))
+}
+
+pub enum ParseType {
+    Integer,
+    Bool,
+    Var(String),
+    Lambda(Box<ParseType>, Box<ParseType>),
+    List(Box<ParseType>),
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -27,24 +34,54 @@ pub enum MonoType {
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct PolyType {
-    pub binds: HashSet<usize>,
+    pub binds: BTreeSet<usize>,
     pub ty: MonoType,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug, Default)]
 pub struct Substitution {
-    map: HashMap<usize, MonoType>,
+    map: BTreeMap<usize, MonoType>,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Default)]
 pub struct FreeTypeVarVisitor {}
 
-pub type FreeVariables = HashSet<usize>;
+pub type FreeVariables = BTreeSet<usize>;
+
+impl ParseType {
+    pub fn into_poly_ty(self) -> PolyType {
+        let mut map = HashMap::new();
+        let ty = self.into_mono_ty_with_map(&mut map);
+
+        PolyType {
+            binds: map.into_iter().map(|(_, var)| var).collect(),
+            ty,
+        }
+    }
+
+    pub fn into_mono_ty_with_map(self, map: &mut HashMap<String, usize>) -> MonoType {
+        match self {
+            ParseType::Integer => MonoType::Integer,
+            ParseType::Bool => MonoType::Bool,
+            ParseType::Var(ident) => {
+                let new_var = map.len();
+                let entry = map.entry(ident);
+
+                MonoType::Var(*entry.or_insert(new_var))
+            }
+            ParseType::Lambda(box p, box b) => MonoType::Lambda(
+                Box::new(p.into_mono_ty_with_map(map)),
+                Box::new(b.into_mono_ty_with_map(map)),
+            ),
+            ParseType::List(box l) => MonoType::List(Box::new(l.into_mono_ty_with_map(map))),
+        }
+    }
+}
 
 impl Substitution {
     pub fn new(v: impl IntoIterator<Item = (usize, MonoType)>) -> Result<Self> {
         v.into_iter()
-            .fold(Ok(HashMap::new()), |result, (id, ty)| {
+            .fold(Ok(BTreeMap::new()), |result, (id, ty)| {
                 result.and_then(|mut map| {
                     let entry = map.entry(id);
                     if let Entry::Occupied(_) = entry {
@@ -57,16 +94,23 @@ impl Substitution {
             })
             .map(|map| Substitution { map })
     }
+
+    pub fn free_only<Ast: AstRoot>(mut self, env: &TypedEnv<Ast>) -> Self {
+        let mut free_var_visitor = FreeTypeVarVisitor::default();
+        let free_vars = env.apply_visitor(&mut free_var_visitor);
+        replace_with(&mut self.map, Default::default, |map| {
+            map.into_iter()
+                .filter(|(id, _)| free_vars.contains(id))
+                .collect()
+        });
+
+        self
+    }
 }
 
 impl MonoType {
     pub fn instance_of(&self, poly: &PolyType) -> bool {
-        if let Ok(substitution) = unify(self, &poly.ty) {
-            let ids: HashSet<usize> = substitution.map.keys().cloned().collect();
-            ids.eq(&poly.binds)
-        } else {
-            false
-        }
+        unify(self, &poly.ty).is_ok()
     }
 }
 
@@ -112,7 +156,7 @@ impl MutVisitor<PolyType, ()> for Substitution {
         node.ty.apply_mut_visitor(self);
         let mut free_visitor = FreeTypeVarVisitor::default();
         let free_vars = node.ty.apply_visitor(&mut free_visitor);
-        replace_with(&mut node.binds, HashSet::default, |binds| {
+        replace_with(&mut node.binds, BTreeSet::default, |binds| {
             binds
                 .into_iter()
                 .filter(|id| free_vars.contains(id))
@@ -146,6 +190,9 @@ impl MutVisitor<Substitution, Result<()>> for Substitution {
         node.map.iter_mut().for_each(|(_, ty)| {
             ty.apply_mut_visitor(self);
         });
+        self.map.iter_mut().for_each(|(_, ty)| {
+            ty.apply_mut_visitor(node);
+        });
 
         for (i, ty) in self.map.iter() {
             let entry = node.map.entry(*i);
@@ -165,14 +212,14 @@ impl MutVisitor<Substitution, Result<()>> for Substitution {
 impl Visitor<MonoType, FreeVariables> for FreeTypeVarVisitor {
     fn visit(&mut self, node: &MonoType) -> FreeVariables {
         match node {
-            MonoType::Var(i) => HashSet::from([*i]),
+            MonoType::Var(i) => BTreeSet::from([*i]),
             MonoType::Lambda(ty_1, ty_2) => {
                 let mut free_vars = ty_1.apply_visitor(self);
                 free_vars.extend(ty_2.apply_visitor(self));
                 free_vars
             }
             MonoType::List(ty) => ty.apply_visitor(self),
-            _ => HashSet::new(),
+            _ => BTreeSet::new(),
         }
     }
 }
@@ -185,7 +232,7 @@ impl Visitor<PolyType, FreeVariables> for FreeTypeVarVisitor {
 }
 impl<Ast: AstRoot> Visitor<TypedEnv<Ast>, FreeVariables> for FreeTypeVarVisitor {
     fn visit(&mut self, node: &TypedEnv<Ast>) -> FreeVariables {
-        node.env.iter().fold(HashSet::new(), |mut acc, (_, ty)| {
+        node.env.iter().fold(BTreeSet::new(), |mut acc, (_, ty)| {
             acc.extend(ty.apply_visitor(self));
             acc
         })

@@ -9,9 +9,8 @@ use crate::systems::common::syntax::{
     VariableNode,
 };
 use crate::systems::common::ty::{unify, MonoType, PolyType, Substitution};
-use crate::visitor::{MutVisitable, Visitor};
-use crate::Visitable;
-use std::collections::HashSet;
+use crate::visitor::{MutVisitable, Visitable, Visitor};
+use std::collections::{BTreeSet, HashSet};
 use std::fmt::Debug;
 
 pub type TyckTreeOf<Ast> = DerivationTree<TypeJudgement<TypedEnv<Ast>>>;
@@ -25,11 +24,11 @@ pub struct TypeCheckVisitor<Ast: AstRoot> {
 }
 
 impl<Ast: AstRoot> TypeCheckVisitor<Ast> {
-    pub fn new(env: TypedEnv<Ast>, expected: Option<MonoType>) -> Self {
+    pub fn new(env: TypedEnv<Ast>, expected: Option<MonoType>, ty_var_counter: usize) -> Self {
         Self {
             env,
             expected,
-            ty_var_counter: 0,
+            ty_var_counter,
         }
     }
 
@@ -55,7 +54,7 @@ impl<Ast: AstRoot> TypeCheckVisitor<Ast> {
         let index = self.ty_var_counter;
         self.ty_var_counter += 1;
         PolyType {
-            binds: HashSet::from([index]),
+            binds: BTreeSet::from([]),
             ty: MonoType::Var(index),
         }
     }
@@ -92,7 +91,7 @@ impl<Ast: AstRoot> Visitor<IntegerNode, TyckResult<Ast>> for TypeCheckVisitor<As
                 TypeJudgement {
                     env: self.env.clone(),
                     term: Ast::integer(node.0)?,
-                    ty: self.env.generalize(ty),
+                    ty,
                 },
                 T_INT,
                 vec![],
@@ -116,7 +115,7 @@ impl<Ast: AstRoot> Visitor<BooleanNode, TyckResult<Ast>> for TypeCheckVisitor<As
                 TypeJudgement {
                     env: self.env.clone(),
                     term: Ast::boolean(node.0)?,
-                    ty: self.env.generalize(ty),
+                    ty,
                 },
                 T_BOOL,
                 vec![],
@@ -131,19 +130,27 @@ impl<Ast: AstRoot> Visitor<VariableNode, TyckResult<Ast>> for TypeCheckVisitor<A
         let poly = self
             .env
             .look_up(&node.0)
-            .ok_or_else(|| Error::UnknownIdentifier(node.0.clone()))?;
+            .ok_or_else(|| Error::UnknownIdentifier(node.0.clone()))?
+            .clone();
 
         let (ty, unifier) = if let Some(expect) = self.expected.as_ref() {
-            if expect.instance_of(poly) {
+            if expect.instance_of(&poly) {
                 Ok((
-                    self.env.generalize(expect.clone()),
-                    unify(expect, &poly.ty)?,
+                    expect.clone(),
+                    unify(&poly.ty, expect)?.free_only(&self.env),
                 ))
             } else {
                 Err(tyck_as_error(node, expect))
             }
         } else {
-            Ok((poly.clone(), Substitution::default()))
+            let mut sub = Substitution::new(
+                poly.binds
+                    .iter()
+                    .map(|original| (*original, self.new_ty_var().ty)),
+            )?;
+            let mut ty = poly.ty.clone();
+            ty.apply_mut_visitor(&mut sub);
+            Ok((ty, Substitution::default()))
         }?;
 
         Ok((
@@ -185,7 +192,7 @@ where
                 TypeJudgement {
                     env: self.env.clone(),
                     term: Ast::op_term(node.clone())?,
-                    ty: self.env.generalize(node_ty),
+                    ty: node_ty,
                 },
                 match node.op {
                     Op::Plus => T_PLUS,
@@ -213,7 +220,7 @@ where
         let (mut t_tree, mut t_unifier) = node.t_branch.apply_visitor(&mut branch_visitor)?;
         let (f_tree, mut f_unifier) = node.f_branch.apply_visitor(&mut branch_visitor)?;
         self.ty_var_counter = branch_visitor.ty_var_counter;
-        let mut unifier = unify(&t_tree.judgement.ty.ty, &f_tree.judgement.ty.ty)?;
+        let mut unifier = unify(&t_tree.judgement.ty, &f_tree.judgement.ty)?;
 
         unifier.apply_mut_visitor(&mut cond_unifier)?;
         unifier.apply_mut_visitor(&mut t_unifier)?;
@@ -244,9 +251,8 @@ where
         let mut visitor_1 = self.expect(None);
         let (tree_1, mut unifier_1) = self.apply_visitor(&node.expr_1, &mut visitor_1)?;
         let mut visitor_2 = self.substitute(&mut unifier_1, self.expected.clone());
-        visitor_2.env = visitor_2
-            .env
-            .append_named(node.ident.clone(), tree_1.judgement.ty.clone());
+        let generalized = visitor_2.env.generalize(tree_1.judgement.ty.clone());
+        visitor_2.env = visitor_2.env.append_named(node.ident.clone(), generalized);
 
         let (tree_2, mut unifier_2) = self.apply_visitor(&node.expr_2, &mut visitor_2)?;
 
@@ -277,7 +283,7 @@ where
     fn visit(&mut self, node: &FunctionNode<Ast>) -> TyckResult<Ast> {
         let (mut p_ty, expected_r_ty) = if let Some(expected_ty) = self.expected.as_ref() {
             if let MonoType::Lambda(box p_ty, box r_ty) = expected_ty {
-                Ok((self.env.generalize(p_ty.clone()), Some(r_ty.clone())))
+                Ok((p_ty.clone().into(), Some(r_ty.clone())))
             } else {
                 Err(tyck_as_error(node, expected_ty))
             }
@@ -286,13 +292,24 @@ where
         }?;
 
         let mut visitor = self.expect(expected_r_ty);
-        visitor.env = visitor.env.append_named(node.bind.clone(), p_ty.clone());
+        visitor.env = self
+            .env
+            .clone()
+            .append_named(node.bind.clone(), p_ty.clone());
 
-        let (b_tree, mut unifier) = self.apply_visitor(&node.body, &mut visitor)?;
+        let (_, mut unifier) = self.apply_visitor(&node.body, &mut visitor)?;
         p_ty.apply_mut_visitor(&mut unifier);
-        let mut ty = b_tree.judgement.ty.clone();
-        ty.ty = MonoType::Lambda(Box::new(p_ty.ty.clone()), Box::new(ty.ty));
-        ty.binds.extend(p_ty.binds.into_iter());
+
+        visitor.env = self
+            .env
+            .clone()
+            .append_named(node.bind.clone(), p_ty.clone());
+        let (b_tree, unifier) = self.apply_visitor(&node.body, &mut visitor)?;
+
+        let ty = MonoType::Lambda(
+            Box::new(p_ty.ty.clone()),
+            Box::new(b_tree.judgement.ty.clone()),
+        );
 
         Ok((
             DerivationTree::new(
@@ -317,30 +334,35 @@ where
     fn visit(&mut self, node: &ApplicationNode<Ast>) -> TyckResult<Ast> {
         let mut result_ty = self.new_ty_var().ty;
         let mut f_visitor = self.expect(None);
-        let (mut f_tree, mut f_unifier) = self.apply_visitor(&node.f, &mut f_visitor)?;
+        let (f_tree, mut f_unifier) = node.f.apply_visitor(&mut f_visitor)?;
+        let mut p_visitor = f_visitor.substitute(&mut f_unifier, None);
+        let (p_tree, mut p_unifier) = f_visitor.apply_visitor(&node.p, &mut p_visitor)?;
 
-        let mut p_visitor = self.substitute(&mut f_unifier, None);
-        let (mut p_tree, mut p_unifier) = self.apply_visitor(&node.p, &mut p_visitor)?;
-
-        let mut original_f_ty = f_tree.judgement.ty.ty.clone();
+        let mut original_f_ty = f_tree.judgement.ty.clone();
         original_f_ty.apply_mut_visitor(&mut p_unifier);
-        let expected_f_ty = MonoType::Lambda(
-            Box::new(p_tree.judgement.ty.ty.clone()),
-            Box::new(result_ty.clone()),
-        );
+        let mut expect_p_ty = p_tree.judgement.ty.clone();
+        let mut expected_f_ty =
+            MonoType::Lambda(Box::new(expect_p_ty.clone()), Box::new(result_ty.clone()));
 
         let mut unifier = unify(&original_f_ty, &expected_f_ty)?;
         result_ty.apply_mut_visitor(&mut unifier);
-        let mut unifier = if let Some(expected_ty) = self.expected.as_ref() {
-            let mut unifier = unify(&result_ty, expected_ty)?;
-            result_ty.apply_mut_visitor(&mut unifier);
 
+        let mut unifier = if let Some(expected_ty) = self.expected.as_ref() {
+            let mut expected_ty_unifier = unify(&result_ty, expected_ty)?;
+            result_ty.apply_mut_visitor(&mut expected_ty_unifier);
+
+            unifier.apply_mut_visitor(&mut expected_ty_unifier)?;
             unifier
         } else {
             unifier
         };
-        f_tree.apply_mut_visitor(&mut unifier);
-        p_tree.apply_mut_visitor(&mut unifier);
+
+        expected_f_ty.apply_mut_visitor(&mut unifier);
+        expect_p_ty.apply_mut_visitor(&mut unifier);
+        let mut f_visitor = self.expect(Some(expected_f_ty));
+        let (f_tree, _) = self.apply_visitor(&node.f, &mut f_visitor)?;
+        let mut p_visitor = self.expect(Some(expect_p_ty));
+        let (p_tree, _) = self.apply_visitor(&node.p, &mut p_visitor)?;
         let mut result_env = self.env.clone();
         result_env.apply_mut_visitor(&mut unifier);
 
@@ -349,7 +371,7 @@ where
                 TypeJudgement {
                     env: self.env.clone(),
                     term: Ast::application_term(node.clone())?,
-                    ty: result_env.generalize(result_ty),
+                    ty: result_ty,
                 },
                 T_APP,
                 vec![f_tree, p_tree],
@@ -379,12 +401,25 @@ where
             )
             .append_named(node.bind.clone(), p_ty.clone().into());
 
-        let (f_tree, mut f_unifier) = self.apply_visitor(&node.body, &mut body_visitor)?;
+        let (_, mut f_unifier) = self.apply_visitor(&node.body, &mut body_visitor)?;
         p_ty.apply_mut_visitor(&mut f_unifier);
         r_ty.apply_mut_visitor(&mut f_unifier);
 
-        let mut expr_visitor = self.substitute(&mut f_unifier, self.expected.clone());
+        body_visitor.env = self
+            .env
+            .clone()
+            .append_named(
+                node.ident.clone(),
+                self.env.generalize(MonoType::Lambda(
+                    Box::new(p_ty.ty.clone()),
+                    Box::new(r_ty.ty.clone()),
+                )),
+            )
+            .append_named(node.bind.clone(), p_ty.clone().into());
 
+        let (f_tree, mut f_unifier) = self.apply_visitor(&node.body, &mut body_visitor)?;
+
+        let mut expr_visitor = self.substitute(&mut f_unifier, self.expected.clone());
         let bind_ty = expr_visitor.env.generalize(MonoType::Lambda(
             Box::new(p_ty.ty.clone()),
             Box::new(r_ty.ty.clone()),
@@ -423,7 +458,7 @@ where
                     TypeJudgement {
                         env: self.env.clone(),
                         term: Ast::nil_list()?,
-                        ty: self.env.generalize(MonoType::List(expected_ty.clone())),
+                        ty: MonoType::List(expected_ty.clone()),
                     },
                     T_NIL,
                     vec![],
@@ -457,7 +492,9 @@ where
         let mut item_visitor = self.expect(expected_nest);
         let (mut item_tree, mut item_unifier) = self.apply_visitor(&node.lhs, &mut item_visitor)?;
 
-        let (list_tree, mut list_unifier) = node.rhs.apply_visitor(self)?;
+        let expect_list_ty = MonoType::List(Box::new(item_tree.judgement.ty.clone()));
+        let mut list_visitor = self.expect(Some(expect_list_ty));
+        let (list_tree, mut list_unifier) = self.apply_visitor(&node.rhs, &mut list_visitor)?;
         item_unifier.apply_mut_visitor(&mut list_unifier)?;
         item_tree.apply_mut_visitor(&mut list_unifier);
 
@@ -490,22 +527,24 @@ where
         target_tree.apply_mut_visitor(&mut uil_unifier);
         unifier.apply_mut_visitor(&mut uil_unifier)?;
 
-        let nested_ty = if let MonoType::List(box ty) = &target_tree.judgement.ty.ty {
-            Ok(PolyType {
-                binds: target_tree.judgement.ty.binds.clone(),
-                ty: ty.clone(),
-            })
+        let nested_ty = if let MonoType::List(box ty) = &target_tree.judgement.ty {
+            Ok(target_visitor.env.generalize(ty.clone()))
         } else {
             let ty = "List".to_string();
             Err(tyck_as_error(&node.expr, &ty))
         }?;
 
         let mut list_branch_visitor =
-            self.substitute(&mut unifier, Some(nil_tree.judgement.ty.ty.clone()));
+            self.substitute(&mut unifier, Some(nil_tree.judgement.ty.clone()));
         list_branch_visitor.env = list_branch_visitor
             .env
             .append_named(node.head_id.clone(), nested_ty)
-            .append_named(node.tail_id.clone(), target_tree.judgement.ty.clone());
+            .append_named(
+                node.tail_id.clone(),
+                target_visitor
+                    .env
+                    .generalize(target_tree.judgement.ty.clone()),
+            );
 
         let (list_tree, mut list_unifier) =
             self.apply_visitor(&node.list_branch, &mut list_branch_visitor)?;

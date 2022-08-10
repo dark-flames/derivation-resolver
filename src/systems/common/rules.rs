@@ -23,6 +23,8 @@ rules![
     (E_APP_REC, "E-AppRec"),
     (E_NIL, "E-Nil"),
     (E_CONS, "E-Cons"),
+    (E_MATCH_NIL, "E-MatchNil"),
+    (E_MATCH_CONS, "E-MatchCons"),
     (B_PLUS, "B-Plus"),
     (B_MINUS, "B-Minus"),
     (B_TIMES, "B-Times"),
@@ -41,7 +43,5 @@ rules![
     (T_APP, "T-App"),
     (T_LET_REC, "T-LetRec"),
     (T_NIL, "T-Nil"),
-    (T_CONS, "T-Cons"),
-    (E_MATCH_NIL, "E-MatchNil"),
-    (E_MATCH_CONS, "E-MatchCons")
+    (T_CONS, "T-Cons")
 ];
