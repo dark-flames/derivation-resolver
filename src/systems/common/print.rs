@@ -17,6 +17,7 @@ use crate::systems::common::ty::{MonoType, PolyType};
 use crate::systems::common::value::{ConcatList, Function, RecursiveFunction, Value};
 use crate::visitor::{Visitable, Visitor};
 use alphabet::*;
+use replace_with::{replace_with, replace_with_and_return};
 
 alphabet!(ENGLISH = "abcdefghijklmnopqrstuvwxyz");
 
@@ -27,15 +28,6 @@ pub struct PrintVisitor {
 }
 
 impl PrintVisitor {
-    pub fn sub_visitor(&mut self) -> Self {
-        let mut ident_iter = ENGLISH.iter_words();
-        ident_iter.next();
-        PrintVisitor {
-            buffer: self.buffer.sub_buffer(),
-            ty_var_map: HashMap::new(),
-            ident_iter,
-        }
-    }
     pub fn parenthesized_visit<T: Visitable>(&mut self, node: &T) -> FmtResult
     where
         Self: Visitor<T, FmtResult>,
@@ -369,15 +361,24 @@ where
         if node.premises.is_empty() {
             self.buffer.write_str("{}")
         } else {
-            let mut sub_visitor = self.sub_visitor();
+            let mut old_buffer: TokenBuffer =
+                replace_with_and_return(&mut self.buffer, TokenBuffer::default, |mut old| {
+                    let sub = old.sub_buffer();
+                    (old, sub)
+                });
             let last_index = node.premises.len() - 1;
             for (index, premise) in node.premises.iter().enumerate() {
-                premise.apply_visitor(&mut sub_visitor)?;
+                premise.apply_visitor(self)?;
                 if index != last_index {
-                    sub_visitor.buffer.commit_line(true)?;
+                    self.buffer.commit_line(true)?;
                 }
             }
-            self.buffer.commit_block(sub_visitor.buffer.freeze()?)
+            replace_with(&mut self.buffer, TokenBuffer::default, move |sub| {
+                old_buffer.commit_block(sub.freeze().unwrap()).unwrap();
+                old_buffer
+            });
+
+            Ok(())
         }
     }
 }
@@ -477,7 +478,7 @@ where
 {
     fn visit(&mut self, node: &TypedEnv<Ast>) -> FmtResult {
         self.visit_by_iter(
-            node.env.iter(),
+            node.collect(),
             |(id, ty), v| {
                 v.buffer.write_str(id)?;
                 v.buffer.write_char(':')?;

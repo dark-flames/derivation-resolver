@@ -8,7 +8,7 @@ use crate::systems::common::parser::Rule;
 use crate::systems::common::ty::FreeTypeVarVisitor;
 use crate::systems::common::tyck::TypeCheckVisitor;
 use crate::systems::poly_ml_4::syntax::PolyML4Node;
-use crate::visitor::Visitable;
+use crate::visitor::{MutVisitable, Visitable};
 use pest::iterators::Pairs;
 use pest::Position;
 
@@ -34,6 +34,9 @@ impl System for PolyML4 {
         judgement
             .term
             .apply_visitor(&mut visitor)
-            .map(|(tree, _)| tree)
+            .map(|(mut tree, mut unifier)| {
+                tree.apply_mut_visitor(&mut unifier);
+                tree
+            })
     }
 }

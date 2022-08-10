@@ -36,12 +36,13 @@ rules![
     (T_IF, "T-If"),
     (T_PLUS, "T-Plus"),
     (T_MINUS, "T-Minus"),
-    (T_TIMES, "T-Times"),
+    (T_MULT, "T-Mult"),
     (T_LT, "T-Lt"),
     (T_LET, "T-Let"),
     (T_ABS, "T-Abs"),
     (T_APP, "T-App"),
     (T_LET_REC, "T-LetRec"),
     (T_NIL, "T-Nil"),
-    (T_CONS, "T-Cons")
+    (T_CONS, "T-Cons"),
+    (T_MATCH, "T-Match")
 ];

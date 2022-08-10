@@ -2,7 +2,7 @@ use crate::error::Error;
 use crate::utils::error_pos;
 use crate::visitor::{MutVisitable, Visitable, Visitor};
 use pest::error::Error as PestError;
-use pest::iterators::{Pair, Pairs};
+use pest::iterators::Pair;
 use pest::{Position, RuleType};
 use std::any::type_name;
 use std::result::Result as StdResult;

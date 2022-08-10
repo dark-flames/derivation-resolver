@@ -95,3 +95,37 @@ fn test_tyck_2() {
     let result = print_visitor.buffer.format(2);
     print!("{}", result);
 }
+
+#[test]
+fn test_tyck_3() {
+    use crate::systems::common::env::TypedEnv;
+    use crate::systems::common::print::PrintVisitor;
+    use crate::systems::common::syntax::*;
+    use crate::systems::common::ty::MonoType;
+    let term = PolyML4Node::FunctionTerm(FunctionNode {
+        bind: "x".to_string(),
+        body: Box::new(PolyML4Node::ApplicationTerm(ApplicationNode {
+            f: Box::new(PolyML4Node::Variable(VariableNode("f".to_string()))),
+            p: Box::new(PolyML4Node::ApplicationTerm(ApplicationNode {
+                f: Box::new(PolyML4Node::Variable(VariableNode("f".to_string()))),
+                p: Box::new(PolyML4Node::Variable(VariableNode("x".to_string()))),
+            })),
+        })),
+    });
+
+    let mut visitor = TypeCheckVisitor::new(
+        TypedEnv::new().append_named("f".to_string(), MonoType::Var(0).into()),
+        Some(MonoType::Lambda(
+            Box::new(MonoType::Var(1)),
+            Box::new(MonoType::Var(1)),
+        )),
+        2,
+    );
+
+    let (mut tree, mut unifier) = term.apply_visitor(&mut visitor).unwrap();
+    tree.apply_mut_visitor(&mut unifier);
+    let mut print_visitor = PrintVisitor::new(0);
+    tree.apply_visitor(&mut print_visitor).unwrap();
+    let result = print_visitor.buffer.format(2);
+    print!("{}", result);
+}

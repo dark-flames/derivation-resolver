@@ -1,7 +1,7 @@
 use replace_with::replace_with;
 use std::cmp::{max, min};
 use std::collections::btree_map::Entry;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::Debug;
 
 use crate::derive::{DerivationTree, Result};
@@ -153,27 +153,20 @@ impl MutVisitor<MonoType, ()> for Substitution {
 }
 impl MutVisitor<PolyType, ()> for Substitution {
     fn visit(&mut self, node: &mut PolyType) {
-        node.ty.apply_mut_visitor(self);
-        let mut free_visitor = FreeTypeVarVisitor::default();
-        let free_vars = node.ty.apply_visitor(&mut free_visitor);
-        replace_with(&mut node.binds, BTreeSet::default, |binds| {
-            binds
-                .into_iter()
-                .filter(|id| free_vars.contains(id))
-                .collect()
-        })
+        let mut new_sub = Substitution::new(
+            self.map
+                .iter()
+                .filter_map(|(i, t)| (!node.binds.contains(i)).then(|| (i.clone(), t.clone()))),
+        )
+        .unwrap();
+
+        node.ty.apply_mut_visitor(&mut new_sub);
     }
 }
-impl<Ast: AstRoot> MutVisitor<TypedEnv<Ast>, ()> for Substitution {
-    fn visit(&mut self, node: &mut TypedEnv<Ast>) {
-        node.env.iter_mut().for_each(|(_, ty)| {
-            ty.apply_mut_visitor(self);
-        });
-    }
-}
+
 impl<Ast: AstRoot> MutVisitor<TypeJudgement<TypedEnv<Ast>>, ()> for Substitution {
     fn visit(&mut self, node: &mut TypeJudgement<TypedEnv<Ast>>) {
-        //node.env.apply_mut_visitor(self);
+        node.env.apply_mut_visitor(self);
         node.ty.apply_mut_visitor(self);
     }
 }
@@ -230,17 +223,9 @@ impl Visitor<PolyType, FreeVariables> for FreeTypeVarVisitor {
         free_var.difference(&node.binds).cloned().collect()
     }
 }
-impl<Ast: AstRoot> Visitor<TypedEnv<Ast>, FreeVariables> for FreeTypeVarVisitor {
-    fn visit(&mut self, node: &TypedEnv<Ast>) -> FreeVariables {
-        node.env.iter().fold(BTreeSet::new(), |mut acc, (_, ty)| {
-            acc.extend(ty.apply_visitor(self));
-            acc
-        })
-    }
-}
 
 pub fn unify(ty_1: &MonoType, ty_2: &MonoType) -> Result<Substitution> {
-    match (ty_1, ty_2) {
+    let r = match (ty_1, ty_2) {
         (ty_1, ty_2) if ty_1.eq(ty_2) => Ok(Substitution::default()),
         (MonoType::Var(var_1), MonoType::Var(var_2)) => {
             Substitution::new([(max(*var_1, *var_2), MonoType::Var(min(*var_1, *var_2)))])
@@ -259,7 +244,13 @@ pub fn unify(ty_1: &MonoType, ty_2: &MonoType) -> Result<Substitution> {
             Ok(p_unifier)
         }
         _ => Err(unification_error(ty_1, ty_2)),
+    };
+
+    if r.is_err() {
+        println!("H");
     }
+
+    r
 }
 
 #[test]

@@ -1,11 +1,13 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
 use crate::systems::common::syntax::{AstRoot, Ident};
-use crate::systems::common::ty::{FreeTypeVarVisitor, MonoType, PolyType};
+use crate::systems::common::ty::{
+    FreeTypeVarVisitor, FreeVariables, MonoType, PolyType, Substitution,
+};
 use crate::systems::common::value::Value;
-use crate::visitor::{MutVisitable, Visitable, Visitor};
+use crate::visitor::{MutVisitable, MutVisitor, Visitable, Visitor};
 
 pub trait Env: Clone + Debug + Eq + PartialEq + Visitable {
     type Item;
@@ -88,7 +90,8 @@ impl<Ast: AstRoot> NamedEnv<Ast> {
 
 #[derive(Clone, Eq, PartialEq, Debug, Default)]
 pub struct TypedEnv<Ast: AstRoot> {
-    pub env: HashMap<Ident, PolyType>,
+    order: Vec<Ident>,
+    env: HashMap<Ident, PolyType>,
     _marker: PhantomData<Ast>,
 }
 
@@ -100,11 +103,15 @@ impl<Ast: AstRoot> Env for TypedEnv<Ast> {
     type Ast = Ast;
 
     fn collect(&self) -> Vec<(&Ident, &Self::Item)> {
-        self.env.iter().collect()
+        self.order
+            .iter()
+            .filter_map(|i| self.env.get(i).map(|t| (i, t)))
+            .collect()
     }
 
     fn append_named(mut self, name: Ident, item: Self::Item) -> Self {
-        self.env.insert(name, item);
+        self.env.insert(name.clone(), item);
+        self.order.push(name);
         self
     }
 
@@ -112,9 +119,11 @@ impl<Ast: AstRoot> Env for TypedEnv<Ast> {
         self.env.get(name)
     }
 }
+
 impl<Ast: AstRoot> TypedEnv<Ast> {
     pub fn new() -> Self {
         TypedEnv {
+            order: Vec::new(),
             env: Default::default(),
             _marker: Default::default(),
         }
@@ -131,5 +140,22 @@ impl<Ast: AstRoot> TypedEnv<Ast> {
                 .collect(),
             ty,
         }
+    }
+}
+
+impl<Ast: AstRoot> MutVisitor<TypedEnv<Ast>, ()> for Substitution {
+    fn visit(&mut self, node: &mut TypedEnv<Ast>) {
+        node.env.iter_mut().for_each(|(_, ty)| {
+            ty.apply_mut_visitor(self);
+        });
+    }
+}
+
+impl<Ast: AstRoot> Visitor<TypedEnv<Ast>, FreeVariables> for FreeTypeVarVisitor {
+    fn visit(&mut self, node: &TypedEnv<Ast>) -> FreeVariables {
+        node.env.iter().fold(BTreeSet::new(), |mut acc, (_, ty)| {
+            acc.extend(ty.apply_visitor(self));
+            acc
+        })
     }
 }
