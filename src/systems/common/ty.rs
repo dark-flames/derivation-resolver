@@ -225,7 +225,7 @@ impl Visitor<PolyType, FreeVariables> for FreeTypeVarVisitor {
 }
 
 pub fn unify(ty_1: &MonoType, ty_2: &MonoType) -> Result<Substitution> {
-    let r = match (ty_1, ty_2) {
+    match (ty_1, ty_2) {
         (ty_1, ty_2) if ty_1.eq(ty_2) => Ok(Substitution::default()),
         (MonoType::Var(var_1), MonoType::Var(var_2)) => {
             Substitution::new([(max(*var_1, *var_2), MonoType::Var(min(*var_1, *var_2)))])
@@ -244,13 +244,7 @@ pub fn unify(ty_1: &MonoType, ty_2: &MonoType) -> Result<Substitution> {
             Ok(p_unifier)
         }
         _ => Err(unification_error(ty_1, ty_2)),
-    };
-
-    if r.is_err() {
-        println!("H");
     }
-
-    r
 }
 
 #[test]

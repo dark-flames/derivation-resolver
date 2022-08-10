@@ -53,7 +53,6 @@ impl<Ast: AstRoot> TypeCheckVisitor<Ast> {
     pub fn new_ty_var(&mut self) -> PolyType {
         let index = self.ty_var_counter;
         self.ty_var_counter += 1;
-        println!("New {}", index);
         PolyType {
             binds: BTreeSet::from([]),
             ty: MonoType::Var(index),
